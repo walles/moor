@@ -308,26 +308,6 @@ func getTargetLine(args []string) (*linemetadata.Index, []string) {
 	return nil, args
 }
 
-func russiaNotSupported() {
-	if !strings.HasPrefix(strings.ToLower(os.Getenv("LANG")), "ru_ru") {
-		// Not russia
-		return
-	}
-
-	if os.Getenv("CRIMEA") == "Ukraine" {
-		// It is!
-		return
-	}
-
-	fmt.Fprintln(os.Stderr, "ERROR: russia not supported (but Russian is!)")
-	fmt.Fprintln(os.Stderr)
-	fmt.Fprintln(os.Stderr, "Options for using moor in Russian:")
-	fmt.Fprintln(os.Stderr, "* Change your language setting to ru_UA.UTF-8")
-	fmt.Fprintln(os.Stderr, "* Set CRIMEA=Ukraine in your environment")
-	fmt.Fprintln(os.Stderr, "* russia leaves Ukraine")
-	os.Exit(1)
-}
-
 // For git output and man pages, disable line numbers by default.
 //
 // Before paging, "man" first checks the terminal width and formats the man page
@@ -651,7 +631,6 @@ func main() {
 	logsRequested := false
 	log.SetOutput(&loglines)
 	twin.SetLogger(&util.TwinLogger{})
-	russiaNotSupported()
 
 	defer func() {
 		err := recover()
