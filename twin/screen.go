@@ -258,7 +258,8 @@ func (screen *UnixScreen) PostEvent(event Event) {
 	case screen.events <- event:
 		// Delivered
 	default:
-		log.Info(fmt.Sprintf("Injected events buffer (size %d) full, event dropped", cap(screen.events)))
+		// FIXME: Log the dropped event type here
+		log.Info(fmt.Sprintf("Events buffer (size %d) full, event dropped", cap(screen.events)))
 	}
 }
 
@@ -346,15 +347,7 @@ func (screen *UnixScreen) onWindowResized() {
 	}
 
 	// Notify client app.
-	select {
-	case screen.events <- EventResize{}:
-		// Event delivered
-	default:
-		// This likely means that the user isn't processing events
-		// quickly enough. Maybe the user's queue will get flooded if
-		// the window is resized too quickly?
-		log.Info("Unable to deliver EventResize, event queue full")
-	}
+	screen.PostEvent(EventResize{})
 }
 
 // Some terminals convert mouse events to key events making scrolling better
