@@ -541,10 +541,10 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				lastSpinnerFrame = "UNSET"
 
 				// Tell the viewer to replace the view
-				screen.Events() <- eventMoreLinesAvailable{}
+				screen.PostEvent(eventMoreLinesAvailable{})
 
 			case <-throttledMoreLines:
-				screen.Events() <- eventMoreLinesAvailable{}
+				screen.PostEvent(eventMoreLinesAvailable{})
 
 				// Disable further receives for 200ms. This avoids flooding the
 				// event loop if a lot of lines are added in a short time.
@@ -573,11 +573,11 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 					continue
 				}
 
-				screen.Events() <- eventSpinnerUpdate{currentSpinnerFrame}
+				screen.PostEvent(eventSpinnerUpdate{currentSpinnerFrame})
 				lastSpinnerFrame = currentSpinnerFrame
 
 			case <-r.MaybeDone:
-				screen.Events() <- eventMaybeDone{}
+				screen.PostEvent(eventMaybeDone{})
 			}
 		}
 	}()
@@ -587,6 +587,8 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 	// Main loop
 	spinner := ""
 	screen.RunMainLoop(func(event twin.Event) {
+		// Event received
+
 		switch event := event.(type) {
 		case twin.EventKeyCode:
 			log.Tracef("Handling key event %d...", event.KeyCode())
@@ -645,6 +647,11 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 		}
 	}, func() bool {
 		// Nothing more to process for now, redraw the screen
+
+		if p.quit {
+			return false
+		}
+
 		p.redraw(spinner)
 
 		p.readerLock.Lock()
@@ -676,7 +683,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			}
 		}
 
-		return p.quit
+		return !p.quit
 	})
 
 	log.Info("Pager main loop done")

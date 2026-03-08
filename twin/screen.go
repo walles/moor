@@ -71,9 +71,6 @@ type Screen interface {
 	// Can be nil if not (yet?) detected
 	TerminalBackground() *Color
 
-	// This channel is what your main loop should be checking.
-	Events() chan Event
-
 	// RunMainLoop blocks and reads terminal input, calling onEvent for each
 	// event. After processing a batch of events (when there are no more
 	// pending), onIdle is called — this is a good time to redraw.
@@ -82,6 +79,10 @@ type Screen interface {
 	//
 	// Returns when onIdle returns false, or when the input stream errors out.
 	RunMainLoop(onEvent func(Event), onIdle func() bool)
+
+	// PostEvent injects an event into the main loop from any goroutine.
+	// The event will be delivered via the onEvent callback.
+	PostEvent(event Event)
 
 	// Pause the screen, run the given function, then resume the screen. Blocks
 	// until the function has completed and the screen has been resumed again.
@@ -252,8 +253,13 @@ func (screen *UnixScreen) Close() {
 	}
 }
 
-func (screen *UnixScreen) Events() chan Event {
-	return screen.events
+func (screen *UnixScreen) PostEvent(event Event) {
+	select {
+	case screen.events <- event:
+		// Delivered
+	default:
+		log.Info(fmt.Sprintf("Injected events buffer (size %d) full, event dropped", cap(screen.events)))
+	}
 }
 
 // Write string to ttyOut, panic on failure, return number of bytes written.

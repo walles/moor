@@ -109,17 +109,18 @@ func (screen *FakeScreen) TerminalBackground() *Color {
 	return nil
 }
 
-func (screen *FakeScreen) Events() chan Event {
-	// TODO: Do better here if or when this becomes a problem
-	return nil
-}
-
 func (screen *FakeScreen) GetRow(row int) []StyledRune {
 	return withoutHiddenRunes(screen.cells[row])
 }
 
 func (screen *FakeScreen) RunMainLoop(onEvent func(Event), onIdle func() bool) {
 	// This method intentionally left blank.
+	//
+	// Fix if this ever becomes a problem.
+}
+
+func (screen *FakeScreen) PostEvent(event Event) {
+	// This method intentionally left blank
 	//
 	// Fix if this ever becomes a problem.
 }
