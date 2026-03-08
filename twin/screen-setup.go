@@ -21,7 +21,11 @@ type interruptableReaderImpl struct {
 	shutdownPipeReader *os.File
 	shutdownPipeWriter *os.File
 
+	wakeupPipeReader *os.File
+	wakeupPipeWriter *os.File
+
 	interrupted atomic.Bool
+	wakeupSent  atomic.Bool
 }
 
 func (r *interruptableReaderImpl) Read(p []byte) (n int, err error) {
@@ -49,13 +53,11 @@ func (r *interruptableReaderImpl) read(p []byte) (n int, err error) {
 	// are checked, up to this limit"
 	//
 	// Ref: https://man7.org/linux/man-pages/man2/select.2.html
-	nfds := r.base.Fd()
-	if r.shutdownPipeReader.Fd() > nfds {
-		nfds = r.shutdownPipeReader.Fd()
-	}
+	nfds := max(r.wakeupPipeReader.Fd(), r.shutdownPipeReader.Fd(), r.base.Fd())
 
 	readFds := unix.FdSet{}
 	readFds.Set(int(r.shutdownPipeReader.Fd()))
+	readFds.Set(int(r.wakeupPipeReader.Fd()))
 	readFds.Set(int(r.base.Fd()))
 
 	_, err = unix.Select(int(nfds)+1, &readFds, nil, nil, nil)
@@ -77,6 +79,17 @@ func (r *interruptableReaderImpl) read(p []byte) (n int, err error) {
 		err = io.EOF
 
 		return
+	}
+
+	if readFds.IsSet(int(r.wakeupPipeReader.Fd())) {
+		buffer := make([]byte, 1)
+		_, readErr := r.wakeupPipeReader.Read(buffer)
+		if readErr != nil {
+			log.Info(fmt.Sprint("Failed to consume wakeup byte: ", readErr))
+		}
+
+		r.wakeupSent.Store(false)
+		return 0, nil
 	}
 
 	if readFds.IsSet(int(r.base.Fd())) {
@@ -107,6 +120,25 @@ func (r *interruptableReaderImpl) Interrupt() {
 	log.Info("Interruptable reader interrupted")
 }
 
+func (r *interruptableReaderImpl) Wakeup() error {
+	if r.interrupted.Load() {
+		return nil
+	}
+
+	if !r.wakeupSent.CompareAndSwap(false, true) {
+		// Wakeup already pending
+		return nil
+	}
+
+	_, err := r.wakeupPipeWriter.Write([]byte{1})
+	if err != nil {
+		r.wakeupSent.Store(false)
+		return fmt.Errorf("failed to send wakeup byte: %w", err)
+	}
+
+	return nil
+}
+
 func newInterruptableReader(base *os.File) (interruptableReader, error) {
 	reader := interruptableReaderImpl{
 		base: base,
@@ -118,6 +150,24 @@ func newInterruptableReader(base *os.File) (interruptableReader, error) {
 
 	reader.shutdownPipeReader = pr
 	reader.shutdownPipeWriter = pw
+
+	wakeupReader, wakeupWriter, err := os.Pipe()
+	if err != nil {
+		closeErr := reader.shutdownPipeReader.Close()
+		if closeErr != nil {
+			log.Error(fmt.Sprint("Failed to close shutdown pipe reader: ", closeErr))
+		}
+
+		closeErr = reader.shutdownPipeWriter.Close()
+		if closeErr != nil {
+			log.Error(fmt.Sprint("Failed to close shutdown pipe writer: ", closeErr))
+		}
+
+		return nil, err
+	}
+
+	reader.wakeupPipeReader = wakeupReader
+	reader.wakeupPipeWriter = wakeupWriter
 
 	return &reader, nil
 }

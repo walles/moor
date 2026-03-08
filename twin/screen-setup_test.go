@@ -68,3 +68,52 @@ func TestInterruptableReader_blockedOnReadImmediate(t *testing.T) {
 	assert.Equal(t, err, io.EOF)
 	assert.Equal(t, n, 0)
 }
+
+func TestInterruptableReader_wakeupDoesNotShutdown(t *testing.T) {
+	pipeReader, pipeWriter, err := os.Pipe()
+	assert.NilError(t, err)
+
+	testMe, err := newInterruptableReader(pipeReader)
+	assert.NilError(t, err)
+
+	type readResult struct {
+		n   int
+		err error
+	}
+
+	// Background read once
+	readResultChan := make(chan readResult)
+	go func() {
+		defer func() {
+			panicHandler("TestInterruptableReader_wakeupDoesNotShutdown()", recover(), debug.Stack())
+		}()
+
+		buffer := make([]byte, 1)
+		n, err := testMe.Read(buffer)
+		readResultChan <- readResult{n, err}
+	}()
+
+	// Give the reader thread some time to start awaiting bytes
+	time.Sleep(100 * time.Millisecond)
+
+	// Wakeup the reader
+	err = testMe.Wakeup()
+	assert.NilError(t, err)
+
+	// Since we poked it, the reader should now return an empty result
+	result := <-readResultChan
+	assert.Equal(t, result.n, 0)
+	assert.NilError(t, result.err)
+
+	// Write something...
+	written, err := pipeWriter.Write([]byte{42})
+	assert.NilError(t, err)
+	assert.Equal(t, written, 1)
+
+	// ... and we should be able to get it back from the reader
+	buffer := make([]byte, 1)
+	n, err := testMe.Read(buffer)
+	assert.NilError(t, err)
+	assert.Equal(t, n, 1)
+	assert.Equal(t, buffer[0], byte(42))
+}

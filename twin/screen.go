@@ -84,6 +84,9 @@ type interruptableReader interface {
 
 	// Interrupt unblocks the read call, either now or eventually.
 	Interrupt()
+
+	// Wakeup unblocks a blocking Read() call without shutting the reader down.
+	Wakeup() error
 }
 
 type lastRendered struct {
@@ -126,6 +129,9 @@ type UnixScreen struct {
 	mouseMode          MouseMode
 
 	paused atomic.Bool
+
+	pauseAcknowledged chan struct{}
+	resumeRequested   chan struct{}
 }
 
 // Example event: "\x1b[<65;127;41M"
@@ -161,6 +167,8 @@ func NewScreenWithMouseModeAndColorCount(mouseMode MouseMode, terminalColorCount
 	screen := UnixScreen{
 		terminalColorCount: terminalColorCount,
 		mouseMode:          mouseMode,
+		pauseAcknowledged:  make(chan struct{}, 1),
+		resumeRequested:    make(chan struct{}, 1),
 	}
 
 	// The number "80" here is from manual testing on my MacBook:
@@ -492,6 +500,18 @@ func (screen *UnixScreen) mainLoop() {
 	expectingTerminalBackgroundColor := true
 	var incompleteResponse []byte // To store incomplete terminal background color responses
 	for {
+		if screen.paused.Load() {
+			// Ack that we are going to sleep
+			select {
+			case screen.pauseAcknowledged <- struct{}{}:
+			default:
+			}
+
+			// Await wakeup call
+			<-screen.resumeRequested
+			continue
+		}
+
 		count, err := screen.ttyInReader.Read(buffer)
 		if err != nil {
 			// Ref:
@@ -524,11 +544,6 @@ func (screen *UnixScreen) mainLoop() {
 			// Not valid, give up
 			expectingTerminalBackgroundColor = false
 			incompleteResponse = nil
-		}
-
-		if screen.paused.Load() {
-			// Ignore all input while paused
-			continue
 		}
 
 		if count > maxBytesRead {
@@ -1151,12 +1166,34 @@ func (screen *UnixScreen) showNLines(width int, height int, clearFirst bool) {
 // Error returns mean that either pausing failed or the run function failed. If
 // resuming fails, this method will panic.
 func (screen *UnixScreen) PauseAndCall(run func() error) error {
+	// Tell the main event loop to pause
 	screen.paused.Store(true)
-	defer screen.paused.Store(false)
+
+	// Wake up the main event loop reader so it stops waiting for input and the
+	// pause ^ can be activated
+	err := screen.ttyInReader.Wakeup()
+	if err != nil {
+		screen.paused.Store(false)
+		return fmt.Errorf("failed to wake input reader before pause: %w", err)
+	}
+
+	// Wait for the main event loop to acknowledge that it has paused
+	//
+	// FIXME: Will this work on Windows? ttyInReader.Wakeup() is a no-op there
+	// right now.
+	<-screen.pauseAcknowledged
+
+	defer func() {
+		// Clear pause first so main loop won't re-ack pause
+		screen.paused.Store(false)
+
+		// Then let the main loop continue
+		screen.resumeRequested <- struct{}{}
+	}()
 
 	screen.leaveAlternateScreenSession()
 
-	err := screen.restoreTtyInTtyOut()
+	err = screen.restoreTtyInTtyOut()
 	if err != nil {
 		return fmt.Errorf("failed to restore terminal state before pause: %w", err)
 	}

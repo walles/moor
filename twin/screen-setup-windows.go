@@ -61,6 +61,13 @@ func (r *interruptableReaderImpl) Interrupt() {
 	r.shutdownRequested.Store(true)
 }
 
+func (r *interruptableReaderImpl) Wakeup() error {
+
+	// Windows lacks a non-destructive wakeup path for blocking reads here.
+	// Leaving this as a no-op keeps pause/resume semantics best-effort.
+	return nil
+}
+
 func newInterruptableReader(base *os.File) (interruptableReader, error) {
 	return &interruptableReaderImpl{base: base}, nil
 }
