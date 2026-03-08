@@ -4,10 +4,8 @@ package twin
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"runtime/debug"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -15,54 +13,26 @@ import (
 	"golang.org/x/term"
 )
 
-// NOTE: Karma points for replacing TestInterruptableReader_blockedOnRead() with
-// TestInterruptableReader_blockedOnReadImmediate() and fixing the Windows
-// implementation here so that the tests pass.
-
-type interruptableReaderImpl struct {
-	base              *os.File
-	shutdownRequested atomic.Bool
-}
-
-// NOTE: To work properly, this Read() should return immediately after somebody
-// calls Interrupt(), *without first reading any bytes from the base reader*.
-//
-// This implementation doesn't do that. If you want to fix this, the not-Windows
-// implementation in screen-setup.go may or may not work as inspiration.
-func (r *interruptableReaderImpl) Read(p []byte) (n int, err error) {
-	if r.shutdownRequested.Load() {
-		err = io.EOF
-		return
+func (r *interruptableReaderImpl) waitForReadReady() (ready bool, err error) {
+	timeoutMillis := uint32(interruptableReaderPollInterval.Milliseconds())
+	if timeoutMillis == 0 {
+		timeoutMillis = 1
 	}
 
-	n, err = r.base.Read(p)
+	waitResult, err := windows.WaitForSingleObject(windows.Handle(r.base.Fd()), timeoutMillis)
 	if err != nil {
-		return
+		return false, err
 	}
 
-	if r.shutdownRequested.Load() {
-		err = io.EOF
-		n = 0
+	if waitResult == uint32(windows.WAIT_OBJECT_0) {
+		return true, nil
 	}
-	return
-}
 
-func (r *interruptableReaderImpl) Interrupt() {
-	// Previously we used to close the screen.ttyIn file descriptor here, but:
-	// * That didn't interrupt the blocking read() in the main loop
-	// * It may or may not have caused shutdown issues on Windows
-	//
-	// Setting this flag doesn't interrupt the blocking read() either, but it
-	// should at least not cause any shutdown issues on Windows.
-	//
-	// Ref:
-	// * https://github.com/walles/moor/issues/217
-	// * https://github.com/walles/moor/issues/221
-	r.shutdownRequested.Store(true)
-}
+	if waitResult == uint32(windows.WAIT_TIMEOUT) {
+		return false, nil
+	}
 
-func newInterruptableReader(base *os.File) (interruptableReader, error) {
-	return &interruptableReaderImpl{base: base}, nil
+	return false, fmt.Errorf("unexpected WaitForSingleObject result: %d", waitResult)
 }
 
 // Poll for terminal size changes. No SIGWINCH on Windows, this is apparently
