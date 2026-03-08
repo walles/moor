@@ -586,42 +586,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	// Main loop
 	spinner := ""
-	for !p.quit {
-		if len(screen.Events()) == 0 {
-			// Nothing more to process for now, redraw the screen
-			p.redraw(spinner)
-
-			p.readerLock.Lock()
-			r := p.readers[p.currentReader]
-			p.readerLock.Unlock()
-
-			// Ref:
-			// https://github.com/gwsw/less/blob/ff8869aa0485f7188d942723c9fb50afb1892e62/command.c#L828-L831
-			//
-			// Note that we do the slow (atomic) checks only if the fast ones
-			// (no locking required) passed.
-			//
-			// Also, we only do this if we have exactly one reader, because
-			// that's what less does.
-			if len(p.readers) == 1 && p.QuitIfOneScreen && !p.isShowingHelp && r.ReadingDone.Load() && r.HighlightingDone.Load() {
-				if p.fitsOnOneScreen() {
-					// Ref:
-					// https://github.com/walles/moor/issues/113#issuecomment-1368294132
-					p.showLineNumbers = false // Requires a redraw to take effect, see below
-					p.DeInit = false
-					p.quit = true
-
-					// Without this the line numbers setting ^ won't take effect
-					p.redraw(spinner)
-
-					log.Info("Exiting because of --quit-if-one-screen, everything fit on one screen and we're done")
-
-					break
-				}
-			}
-		}
-
-		event := <-screen.Events()
+	screen.RunMainLoop(func(event twin.Event) {
 		switch event := event.(type) {
 		case twin.EventKeyCode:
 			log.Tracef("Handling key event %d...", event.KeyCode())
@@ -678,7 +643,41 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 		default:
 			log.Warnf("Unhandled event type: %v", event)
 		}
-	}
+	}, func() bool {
+		// Nothing more to process for now, redraw the screen
+		p.redraw(spinner)
+
+		p.readerLock.Lock()
+		r := p.readers[p.currentReader]
+		p.readerLock.Unlock()
+
+		// Ref:
+		// https://github.com/gwsw/less/blob/ff8869aa0485f7188d942723c9fb50afb1892e62/command.c#L828-L831
+		//
+		// Note that we do the slow (atomic) checks only if the fast ones
+		// (no locking required) passed.
+		//
+		// Also, we only do this if we have exactly one reader, because
+		// that's what less does.
+		if len(p.readers) == 1 && p.QuitIfOneScreen && !p.isShowingHelp && r.ReadingDone.Load() && r.HighlightingDone.Load() {
+			if p.fitsOnOneScreen() {
+				// Ref:
+				// https://github.com/walles/moor/issues/113#issuecomment-1368294132
+				p.showLineNumbers = false // Requires a redraw to take effect, see below
+				p.DeInit = false
+				p.quit = true
+
+				// Without this the line numbers setting ^ won't take effect
+				p.redraw(spinner)
+
+				log.Info("Exiting because of --quit-if-one-screen, everything fit on one screen and we're done")
+
+				return false
+			}
+		}
+
+		return p.quit
+	})
 
 	log.Info("Pager main loop done")
 }

@@ -74,6 +74,15 @@ type Screen interface {
 	// This channel is what your main loop should be checking.
 	Events() chan Event
 
+	// RunMainLoop blocks and reads terminal input, calling onEvent for each
+	// event. After processing a batch of events (when there are no more
+	// pending), onIdle is called — this is a good time to redraw.
+	//
+	// If onIdle returns false, the main loop exits.
+	//
+	// Returns when onIdle returns false, or when the input stream errors out.
+	RunMainLoop(onEvent func(Event), onIdle func() bool)
+
 	// Pause the screen, run the given function, then resume the screen. Blocks
 	// until the function has completed and the screen has been resumed again.
 	PauseAndCall(run func() error) error
@@ -475,6 +484,24 @@ func (screen *UnixScreen) enableMouseTrackingLocked(enable bool) {
 		screen.writeLocked("\x1b[?1006;1000h")
 	} else {
 		screen.writeLocked("\x1b[?1006;1000l")
+	}
+}
+
+func (screen *UnixScreen) RunMainLoop(onEvent func(Event), onIdle func() bool) {
+	for {
+		select {
+		case event := <-screen.events:
+			onEvent(event)
+
+		default:
+			// No events, time to redraw!
+			if !onIdle() {
+				return
+			}
+
+			// Block after idle call until there are more events
+			onEvent(<-screen.events)
+		}
 	}
 }
 
