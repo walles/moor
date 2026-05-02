@@ -108,7 +108,7 @@ type ReaderImpl struct {
 	// is not set, we are not reading from a file.
 	FileName *string
 
-	// How many bytes have we read so far?
+	// How many bytes have we read so far? -1 means unknown (non-seekable source).
 	bytesCount int64
 
 	endsWithNewline bool
@@ -479,7 +479,9 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 
 // tailOnce performs one iteration of the file tailing check.
 //
-// Returns (shouldContinue, error): shouldContinue=false means tailing should stop.
+// Returns (shouldContinue, error): shouldContinue=false with nil error means
+// tailing should stop cleanly; shouldContinue=false with a non-nil error means
+// tailing stopped due to a failure.
 func (reader *ReaderImpl) tailOnce() (bool, error) {
 	reader.RLock()
 	fileName := reader.FileName
