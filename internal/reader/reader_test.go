@@ -515,6 +515,51 @@ func TestReadShrunkFile(t *testing.T) {
 	assert.Equal(t, allLines.Lines[0].Plain(), "New")
 }
 
+func TestRequestReload(t *testing.T) {
+	// Make a temp file with initial content
+	file, err := os.CreateTemp("", "moor-TestRequestReload-*.txt")
+	assert.NilError(t, err)
+	defer os.Remove(file.Name()) //nolint:errcheck
+
+	// Use content shorter than the replacement so the file grows on rewrite,
+	// meaning auto-reload-on-shrink would not trigger.
+	_, err = file.WriteString("Original\n")
+	assert.NilError(t, err)
+
+	// Start a reader on that file
+	testMe, err := NewFromFilename(file.Name(), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	assert.NilError(t, testMe.Wait())
+
+	allLines := testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1)
+	assert.Equal(t, allLines.Lines[0].Plain(), "Original")
+
+	// Overwrite with longer content — file grows, so auto-reload-on-shrink won't fire
+	err = os.WriteFile(file.Name(), []byte("Replacement content\n"), 0600)
+	assert.NilError(t, err)
+
+	// Manually request a reload
+	testMe.RequestReload()
+
+	// Give the tailing goroutine up to 2s to reload
+	for range 20 {
+		allLines = testMe.GetLines(linemetadata.Index{}, 10)
+		if len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "Replacement content" {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Wait for the reload to fully complete before asserting
+	assert.NilError(t, testMe.Wait())
+
+	allLines = testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1, "Expected one line after reload, got %d", len(allLines.Lines))
+	assert.Equal(t, allLines.Lines[0].Plain(), "Replacement content")
+}
+
 // If people keep appending to the currently opened file we should display those
 // changes.
 //

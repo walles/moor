@@ -226,6 +226,9 @@ func (m PagerModeViewing) onRune(char rune) {
 			p.mode = &PagerModeInfo{Pager: p, Text: "Word wrapping disabled"}
 		}
 
+	case 'r':
+		p.readers[p.currentReader].RequestReload()
+
 	case '\x14': // CTRL-t
 		p.cycleTabSize()
 

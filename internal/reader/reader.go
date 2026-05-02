@@ -145,6 +145,9 @@ type ReaderImpl struct {
 	// Stored for use when reloading the file after it has been rewritten.
 	formatter     chroma.Formatter
 	readerOptions ReaderOptions
+
+	// Send on this channel to request a reload from the tailing goroutine.
+	reloadRequested chan struct{}
 }
 
 // InputLines contains a number of lines from the reader, plus metadata
@@ -529,26 +532,49 @@ func (reader *ReaderImpl) tailFile() error {
 		return nil
 	}
 
-	if !isSeekableFile(fileName) {
-		log.Debugf("Giving up on tailing, %s is not seekable", *fileName)
-		return nil
+	shouldPoll := isSeekableFile(fileName)
+	if shouldPoll {
+		log.Debugf("Tailing file %s", *fileName)
+	} else {
+		log.Debugf("Not tailing %s (not seekable), waiting for reload requests", *fileName)
 	}
 
-	log.Debugf("Tailing file %s", *fileName)
-
 	for {
-		// NOTE: We could use something like
-		// https://github.com/fsnotify/fsnotify instead of sleeping and polling
-		// here.
-		time.Sleep(1 * time.Second)
+		// A nil channel is never selected, so when shouldPoll is false the
+		// timer case is effectively disabled and we only wake on reloadRequested.
+		var timer <-chan time.Time
+		if shouldPoll {
+			timer = time.After(1 * time.Second)
+		}
 
-		shouldContinue, err := reader.tailOnce()
-		if err != nil {
-			return err
+		select {
+		case <-timer:
+			shouldContinue, err := reader.tailOnce()
+			if err != nil {
+				return err
+			}
+			if !shouldContinue {
+				shouldPoll = false
+			}
+
+		case <-reader.reloadRequested:
+			err := reader.reloadFromFile(*fileName)
+			if err != nil {
+				return err
+			}
+			shouldPoll = isSeekableFile(fileName)
 		}
-		if !shouldContinue {
-			return nil
-		}
+	}
+}
+
+// RequestReload asks the tailing goroutine to reload the file from the start.
+// Safe to call from any goroutine. No-op if no filename is set (e.g. stdin)
+// or if a reload is already pending.
+func (reader *ReaderImpl) RequestReload() {
+	select {
+	case reader.reloadRequested <- struct{}{}:
+	default:
+		// Reload already pending, or not tailing — ignore.
 	}
 }
 
@@ -651,6 +677,8 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 
 		formatter:     formatter,
 		readerOptions: options,
+
+		reloadRequested: make(chan struct{}, 1),
 	}
 
 	go func() {
