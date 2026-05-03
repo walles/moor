@@ -890,3 +890,131 @@ func TestReadFileReplacedWithLongerFile(t *testing.T) {
 	assert.Equal(t, len(allLines.Lines), 1, "Expected one line after rewrite, got %d", len(allLines.Lines))
 	assert.Equal(t, allLines.Lines[0].Plain(), "bbbccc")
 }
+
+func TestReadFileReplacedWithSameSizeFile(t *testing.T) {
+	// Make a temp file with an initial string
+	file, err := os.CreateTemp("", "moor-TestReadFileReplacedWithSameSizeFile-*.txt")
+	assert.NilError(t, err)
+	defer os.Remove(file.Name()) //nolint:errcheck
+
+	_, err = file.WriteString("aaa\n")
+	assert.NilError(t, err)
+	err = file.Close()
+	assert.NilError(t, err)
+
+	// Start a reader on that file
+	testMe, err := NewFromFilename(file.Name(), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	// Wait for the reader to finish reading
+	assert.NilError(t, testMe.Wait())
+
+	allLines := testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1)
+	assert.Equal(t, allLines.Lines[0].Plain(), "aaa")
+
+	// Rewrite the file with completely different, same size content
+	err = os.WriteFile(file.Name(), []byte("bbb\n"), 0600)
+	assert.NilError(t, err)
+
+	// Give the background tailing goroutine up to 2s to detect and reload
+	for range 20 {
+		allLines = testMe.GetLines(linemetadata.Index{}, 10)
+		if len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "bbb" {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Wait for the reload to fully complete before asserting
+	assert.NilError(t, testMe.Wait())
+
+	allLines = testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1, "Expected one line after rewrite, got %d", len(allLines.Lines))
+	assert.Equal(t, allLines.Lines[0].Plain(), "bbb")
+}
+
+func TestReadAppendedFile_LongInitialState(t *testing.T) {
+	file, err := os.CreateTemp("", "moor-TestReadAppendedFile_LongInitialState-*.txt")
+	assert.NilError(t, err)
+	defer os.Remove(file.Name()) //nolint:errcheck
+
+	// Create a large initial file
+	longString := strings.Repeat("a", 10000) + "\n"
+	_, err = file.WriteString(longString)
+	assert.NilError(t, err)
+
+	// Start a reader on that file
+	testMe, err := NewFromFilename(file.Name(), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	// Wait for the reader to finish reading
+	assert.NilError(t, testMe.Wait())
+
+	allLines := testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1)
+	assert.Equal(t, len(allLines.Lines[0].Plain()), 10000)
+
+	// Append to the file
+	_, err = file.WriteString("bbb\n")
+	assert.NilError(t, err)
+
+	// Give the reader some time to react
+	for i := 0; i < 20; i++ {
+		allLines = testMe.GetLines(linemetadata.Index{}, 10)
+		if len(allLines.Lines) == 2 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Verify we got the two lines
+	allLines = testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 2, "Expected two lines after adding a second one, got %d", len(allLines.Lines))
+	assert.Equal(t, allLines.Lines[1].Plain(), "bbb")
+}
+
+func TestReadFileReplaced_LongInitialState(t *testing.T) {
+	file, err := os.CreateTemp("", "moor-TestReadFileReplaced_LongInitialState-*.txt")
+	assert.NilError(t, err)
+	defer os.Remove(file.Name()) //nolint:errcheck
+
+	// Create a large initial file
+	longString := strings.Repeat("a", 10000) + "\n"
+	_, err = file.WriteString(longString)
+	assert.NilError(t, err)
+	err = file.Close()
+	assert.NilError(t, err)
+
+	// Start a reader on that file
+	testMe, err := NewFromFilename(file.Name(), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	// Wait for the reader to finish reading
+	assert.NilError(t, testMe.Wait())
+
+	allLines := testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1)
+	assert.Equal(t, len(allLines.Lines[0].Plain()), 10000)
+
+	// Rewrite the file with completely different content
+	biggerLongString := strings.Repeat("b", 10001) + "\n"
+	err = os.WriteFile(file.Name(), []byte(biggerLongString), 0600)
+	assert.NilError(t, err)
+
+	// Give the background tailing goroutine up to 2s to detect and reload
+	for range 20 {
+		allLines = testMe.GetLines(linemetadata.Index{}, 10)
+		if len(allLines.Lines) == 1 && len(allLines.Lines[0].Plain()) == 10001 {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Wait for the reload to fully complete before asserting
+	assert.NilError(t, testMe.Wait())
+
+	allLines = testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1, "Expected one line after rewrite, got %d", len(allLines.Lines))
+	assert.Equal(t, len(allLines.Lines[0].Plain()), 10001)
+}
