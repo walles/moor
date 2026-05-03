@@ -847,3 +847,46 @@ func TestTailCompressedFileNoReloadLoop(t *testing.T) {
 		t.Errorf("FAIL: Reader reloaded the file! Expected pointers to match.")
 	}
 }
+
+func TestReadFileReplacedWithLongerFile(t *testing.T) {
+	// Make a temp file with an initial string
+	file, err := os.CreateTemp("", "moor-TestReadFileReplacedWithLongerFile-*.txt")
+	assert.NilError(t, err)
+	defer os.Remove(file.Name()) //nolint:errcheck
+
+	_, err = file.WriteString("aaa\n")
+	assert.NilError(t, err)
+	err = file.Close()
+	assert.NilError(t, err)
+
+	// Start a reader on that file
+	testMe, err := NewFromFilename(file.Name(), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	// Wait for the reader to finish reading
+	assert.NilError(t, testMe.Wait())
+
+	allLines := testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1)
+	assert.Equal(t, allLines.Lines[0].Plain(), "aaa")
+
+	// Rewrite the file with completely different, longer content
+	err = os.WriteFile(file.Name(), []byte("bbbccc\n"), 0600)
+	assert.NilError(t, err)
+
+	// Give the background tailing goroutine up to 2s to detect and reload
+	for range 20 {
+		allLines = testMe.GetLines(linemetadata.Index{}, 10)
+		if len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "bbbccc" {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Wait for the reload to fully complete before asserting
+	assert.NilError(t, testMe.Wait())
+
+	allLines = testMe.GetLines(linemetadata.Index{}, 10)
+	assert.Equal(t, len(allLines.Lines), 1, "Expected one line after rewrite, got %d", len(allLines.Lines))
+	assert.Equal(t, allLines.Lines[0].Plain(), "bbbccc")
+}
