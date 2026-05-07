@@ -3,6 +3,7 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"runtime/debug"
@@ -84,6 +85,9 @@ func FindFirstHit(reader reader.Reader, search search.Search, startPosition line
 	// Make a results array, with one result per chunk
 	findings := make([]chan *linemetadata.Index, chunkCount)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Search all chunks in parallel
 	for i, searchStart := range searchStarts {
 		findings[i] = make(chan *linemetadata.Index)
@@ -101,7 +105,11 @@ func FindFirstHit(reader reader.Reader, search search.Search, startPosition line
 				PanicHandler("findFirstHit()/chunkSearch", recover(), debug.Stack())
 			}()
 
-			findings[i] <- _findFirstHit(reader, searchStart, search, chunkBefore, direction)
+			select {
+			case <-ctx.Done():
+				return
+			case findings[i] <- _findFirstHit(reader, searchStart, search, chunkBefore, direction):
+			}
 		}(i, searchStart, chunkBefore)
 	}
 
