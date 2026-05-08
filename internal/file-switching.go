@@ -13,6 +13,7 @@ func (p *Pager) previousFile() {
 		newIndex = 0
 	}
 	p.currentReader = newIndex
+	p.searchCache.SetReaderIdx(newIndex)
 	log.Tracef("Switched to previous file, index %d", p.currentReader)
 
 	select {
@@ -30,6 +31,7 @@ func (p *Pager) nextFile() {
 		newIndex = len(p.readers) - 1
 	}
 	p.currentReader = newIndex
+	p.searchCache.SetReaderIdx(newIndex)
 	log.Tracef("Switched to next file, index %d", p.currentReader)
 
 	select {
@@ -43,6 +45,7 @@ func (p *Pager) firstFile() {
 	defer p.readerLock.Unlock()
 
 	p.currentReader = 0
+	p.searchCache.SetReaderIdx(0)
 	log.Tracef("Switched to first file, index %d", p.currentReader)
 
 	select {

@@ -22,11 +22,11 @@ type Line struct {
 func (line *Line) HighlightedTokens(
 	plainTextStyle twin.Style,
 	searchHitStyle twin.Style,
-	search search.Search,
+	search_term search.Search,
 	lineIndex linemetadata.Index,
 	maxTokensCount int,
-) textstyles.StyledRunesWithTrailer {
-	matchRanges := search.GetMatchRanges(line.Plain(lineIndex))
+) (textstyles.StyledRunesWithTrailer, search.MatchRanges) {
+	matchRanges := search_term.GetMatchRanges(line.Plain(lineIndex), lineIndex)
 
 	fromString := textstyles.StyledRunesFromString(plainTextStyle, string(line.raw), &lineIndex, maxTokensCount)
 	returnRunes := make([]textstyles.CellWithMetadata, 0, len(fromString.StyledRunes))
@@ -52,7 +52,7 @@ func (line *Line) HighlightedTokens(
 		StyledRunes:       returnRunes,
 		Trailer:           fromString.Trailer,
 		ContainsSearchHit: !matchRanges.Empty(),
-	}
+	}, matchRanges
 }
 
 func (line *Line) HasManPageFormatting() bool {

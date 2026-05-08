@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"slices"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
@@ -238,11 +239,8 @@ func (p *Pager) scrollToPreviousSearchHit() {
 // manually to see the rest of the hit.
 func (p *Pager) searchHitIsVisible() bool {
 	for _, row := range p.renderLines().lines {
-		for _, cell := range row.cells {
-			if cell.StartsSearchHit {
-				// Found a search hit on screen!
-				return true
-			}
+		if row.containsSearchHit {
+			return true
 		}
 	}
 
@@ -349,95 +347,27 @@ func (p *Pager) scrollRightToSearchHits() bool {
 		return false
 	}
 
-	restoreShowLineNumbers := p.showLineNumbers
-	restoreLeftColumn := p.leftColumnZeroBased
-
-	// Check how far right we can scroll at most. Factors involved:
-	// - Screen width
-	// - Length of longest visible line
-	screenWidth, _ := p.screen.Size()
-
-	widestLineWidth := 0 // In screen cells, some runes are double-width
 	rendered := p.renderLines()
-	for _, inputLine := range rendered.inputLines {
-		lineLength := inputLine.DisplayWidth()
-		if lineLength > widestLineWidth {
-			widestLineWidth = lineLength
-		}
-	}
-
-	// With a 10 wide screen and a 15 wide line (max index 14), the leftmost
-	// screen column can at most be 5:
-	//
-	// Screen column: 0123456789
-	// Line column:   5678901234
-	maxLeftmostColumn := widestLineWidth - screenWidth
-
-	// If we have line numbers and disable them, do any new hits appear?
-	if rendered.numberPrefixWidth > 0 {
-		// If the number prefix width is 4, and the screen width is 10, then 6 should be
-		// the first newly revealed column index (10-4):
-		//
-		// Screen column: 0123456789
-		// New cells:     ______1234
-		//
-		// But since the rightmost column can be covered by scroll-right we need to subtract
-		// one more and get to 5.
-		firstJustRevealedColumn := screenWidth - rendered.numberPrefixWidth - 1
-		if firstJustRevealedColumn <= 0 {
-			log.Info("Screen too narrow ({}) to disable line numbers for search hits, skipping", screenWidth)
-			return false
-		}
-
-		p.showLineNumbers = false
-		for _, row := range p.renderLines().lines {
-			for column := firstJustRevealedColumn; column < len(row.cells); column++ {
-				if row.cells[column].StartsSearchHit {
-					// Found a search hit on screen!
-					return true
-				}
+	width, _ := p.screen.Size()
+	offscreenColumn := p.leftColumnZeroBased + width + 1
+	var nextHitOffset []int
+	for _, line := range rendered.lines {
+		for _, hit := range line.searchHits.Matches {
+			if hit[0] > offscreenColumn {
+				nextHitOffset = append(nextHitOffset, hit[0])
 			}
 		}
-		p.showLineNumbers = restoreShowLineNumbers
 	}
 
-	for p.leftColumnZeroBased < maxLeftmostColumn {
-		// FIXME: Rather than scrolling right one screen at a time, we should
-		// consider scanning all lines for search hits and scrolling directly to the
-		// first one that is off-screen to the right.
-
-		// If the screen width is 1, and we have no line numbers, the answer
-		// could be 1. But since the last column could be covered by scroll-right
-		// markers, we'll say 0.
-		firstNotVisibleColumn := p.leftColumnZeroBased + screenWidth - rendered.numberPrefixWidth - 1
-		if firstNotVisibleColumn < 1 {
-			log.Info("Screen is narrower than number prefix length, not scrolling right for search hits")
-			p.showLineNumbers = restoreShowLineNumbers
-			p.leftColumnZeroBased = restoreLeftColumn
-			return false
-		}
-
-		// Minus one to account for the scroll-left marker that will cover the
-		// first column after scrolling.
-		scrollToColumn := firstNotVisibleColumn - 1
-
-		p.showLineNumbers = false
-		p.leftColumnZeroBased = scrollToColumn
-
-		if p.searchHitIsVisible() {
-			// A new hit showed up!
-			if p.leftColumnZeroBased > maxLeftmostColumn {
-				// Scrolled beyond max, adjust
-				p.leftColumnZeroBased = maxLeftmostColumn
-			}
-			return true
-		}
+	// No hits at all in these lines.
+	if len(nextHitOffset) == 0 {
+		return false
 	}
 
-	// Can't scroll right, pretend nothing happened
-	p.showLineNumbers = restoreShowLineNumbers
-	p.leftColumnZeroBased = restoreLeftColumn
-	return false
+	// Move the left size to the next most hit.
+	p.leftColumnZeroBased = slices.Min(nextHitOffset)
+
+	return true
 }
 
 // Scroll left looking for search hits. Return true if we found any.
@@ -447,79 +377,26 @@ func (p *Pager) scrollLeftToSearchHits() bool {
 		return false
 	}
 
-	restoreLeftColumn := p.leftColumnZeroBased
-	restoreShowLineNumbers := p.showLineNumbers
-
-	screenWidth, _ := p.screen.Size()
-
-	// If we go max left, which column will be the rightmost visible one?
-	var fullLeftRightmostVisibleColumn int
-	{
-		p.showLineNumbers = p.ShowLineNumbers
-		p.leftColumnZeroBased = 0
-		rendered := p.renderLines()
-		// If the screen width is 2, we have columns 0 and 1. The rightmost column can be covered by
-		// scroll-right markers, so the first not-visible column when fully scrolled left is 0, or
-		// "2 - 2".
-		fullLeftRightmostVisibleColumn = screenWidth - 2 - rendered.numberPrefixWidth
-
-		p.leftColumnZeroBased = restoreLeftColumn
-		p.showLineNumbers = restoreShowLineNumbers
+	rendered := p.renderLines()
+	offscreenColumn := p.leftColumnZeroBased
+	var nextHitOffset []int
+	for _, line := range rendered.lines {
+		for _, hit := range line.searchHits.Matches {
+			if hit[0] < offscreenColumn {
+				nextHitOffset = append(nextHitOffset, hit[0])
+			}
+		}
 	}
 
-	if fullLeftRightmostVisibleColumn < 0 {
-		log.Info("Screen too narrow ({}) to scroll left for search hits, skipping", screenWidth)
+	// No hits at all in these lines.
+	if len(nextHitOffset) == 0 {
 		return false
 	}
 
-	// Keep scrolling left until we either find a search hit, or reach the
-	// leftmost column with line numbers shown or not based on the user's
-	// preference.
-	for p.leftColumnZeroBased > 0 || (p.showLineNumbers != p.ShowLineNumbers) {
-		// FIXME: Rather than scrolling left one screen at a time, we should
-		// consider scanning all lines for search hits and scrolling directly to the
-		// first one that is off-screen to the left.
+	// Move the left size to the next most hit.
+	p.leftColumnZeroBased = slices.Max(nextHitOffset)
 
-		// Pretend the current leftmost column is not visible, since it could be
-		// covered by scroll-left markers.
-		lastNotVisibleColumn := p.leftColumnZeroBased
-
-		// Go left
-		if lastNotVisibleColumn <= fullLeftRightmostVisibleColumn {
-			// Going max left will show the column we want
-			p.showLineNumbers = p.ShowLineNumbers
-			p.leftColumnZeroBased = 0
-		} else {
-			// Scroll left one screen.
-			//
-			// If the screen width is 3, and we want column 5 to be visible, and
-			// there can be both scroll-left and scroll-right markers, we should
-			// start at colum 4 (covered by a scroll-left marker), so that
-			// column 5 is visible next to it.
-			//
-			// Set the leftmost column to 4, which is "5 - 3 + 2".
-			scrollToColumn := lastNotVisibleColumn - screenWidth + 2
-			if scrollToColumn < 0 {
-				scrollToColumn = 0
-			}
-
-			p.leftColumnZeroBased = scrollToColumn
-
-			// If showing line numbers was possible we should have ended up in
-			// the other if branch ^
-			p.showLineNumbers = false
-		}
-
-		if p.searchHitIsVisible() {
-			// Found it!
-			return true
-		}
-	}
-
-	// Scrolling left didn't find anything, pretend nothing happened
-	p.showLineNumbers = restoreShowLineNumbers
-	p.leftColumnZeroBased = restoreLeftColumn
-	return false
+	return true
 }
 
 func (p *Pager) isViewing() bool {

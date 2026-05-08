@@ -7,7 +7,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
+	"github.com/walles/moor/v2/internal/search"
 	"github.com/walles/moor/v2/internal/textstyles"
+	"github.com/walles/moor/v2/internal/util"
 	"github.com/walles/moor/v2/twin"
 )
 
@@ -29,6 +31,8 @@ type renderedLine struct {
 	//
 	// Ref: https://github.com/walles/moor/issues/106
 	trailer twin.Style
+
+	searchHits search.MatchRanges
 }
 
 type renderedScreen struct {
@@ -85,6 +89,9 @@ func (p *Pager) redraw(spinner string) {
 // height. If the status line is visible, you'll get at most one less than the
 // screen height from this method.
 func (p *Pager) renderLines() renderedScreen {
+
+	defer util.LogDuration("renderLines")()
+
 	rendered := p.internalRenderLines(true)
 	hasSearchHitLines := false
 	hasNonSearchHitLines := false
@@ -214,11 +221,15 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 // lineNumber and numberPrefixLength are required for knowing how much to
 // indent, and to (optionally) render the line number.
 func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, highlightSearchHitLines bool) []renderedLine {
+	if len(line.Plain()) > 100000 {
+		defer util.LogDuration("renderedLine")()
+	}
+
 	width, _ := p.screen.Size()
 	var wrapped []textstyles.StyledRunesWithTrailer
 	var highlighted textstyles.StyledRunesWithTrailer
 	if p.WrapLongLines {
-		highlighted = line.HighlightedTokens(plainTextStyle, searchHitStyle, p.search, 0)
+		highlighted, _ = line.HighlightedTokens(plainTextStyle, searchHitStyle, p.search, 0)
 
 		wrapped = wrapLine(width-numberPrefixLength, highlighted.StyledRunes)
 	} else {
@@ -228,13 +239,15 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 		//
 		// This is a huge performance gain when dealing with files with
 		// extremeny long lines: https://github.com/walles/moor/issues/358
-		highlighted = line.HighlightedTokens(plainTextStyle, searchHitStyle, p.search, width+p.leftColumnZeroBased+1)
+		highlighted, searchHits := line.HighlightedTokens(
+			plainTextStyle, searchHitStyle, p.search, width+p.leftColumnZeroBased+1)
 
 		// All on one line
 		wrapped = []textstyles.StyledRunesWithTrailer{{
 			StyledRunes:       highlighted.StyledRunes,
 			Trailer:           highlighted.Trailer,
 			ContainsSearchHit: highlighted.ContainsSearchHit,
+			SearchHits:        searchHits,
 		}}
 	}
 
@@ -268,6 +281,7 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 			cells:             decorated,
 			containsSearchHit: subLine.ContainsSearchHit,
 			trailer:           subLine.Trailer,
+			searchHits:        subLine.SearchHits,
 		})
 	}
 

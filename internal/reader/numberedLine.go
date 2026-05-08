@@ -20,7 +20,9 @@ func (nl *NumberedLine) Plain() string {
 
 // maxTokensCount: at most this many tokens will be included in the result. If
 // 0, do all runes. For BenchmarkRenderHugeLine() performance.
-func (nl *NumberedLine) HighlightedTokens(plainTextStyle twin.Style, searchHitStyle twin.Style, search search.Search, maxTokensCount int) textstyles.StyledRunesWithTrailer {
+func (nl *NumberedLine) HighlightedTokens(plainTextStyle twin.Style,
+	searchHitStyle twin.Style, search search.Search,
+	maxTokensCount int) (textstyles.StyledRunesWithTrailer, search.MatchRanges) {
 	return nl.Line.HighlightedTokens(plainTextStyle, searchHitStyle, search, nl.Index, maxTokensCount)
 }
 

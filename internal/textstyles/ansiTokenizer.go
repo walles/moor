@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/search"
 	"github.com/walles/moor/v2/twin"
 )
 
@@ -37,6 +38,7 @@ type StyledRunesWithTrailer struct {
 	StyledRunes       []CellWithMetadata
 	Trailer           twin.Style
 	ContainsSearchHit bool
+	SearchHits        search.MatchRanges
 }
 
 func isPlain(s string) bool {

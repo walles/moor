@@ -66,7 +66,8 @@ type Pager struct {
 	// mode is better?
 	mode PagerMode
 
-	search search.Search
+	search      search.Search
+	searchCache *search.SearchCache
 
 	// This should never be null while paging. Configured in NewPager().
 	searchHistory *SearchHistory
@@ -237,6 +238,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		ScrollRightHint:             textstyles.CellWithMetadata{Rune: '>', Style: twin.StyleDefault.WithAttr(twin.AttrReverse)},
 		scrollPosition:              newScrollPosition(name),
 		WithSearchHitLineBackground: true,
+		searchCache:                 search.NewSearchCache(),
 	}
 
 	pager.mode = PagerModeViewing{pager: &pager}
@@ -247,6 +249,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 
 	searchHistory := BootSearchHistory("")
 	pager.searchHistory = &searchHistory
+	pager.search.Cache = pager.searchCache
 
 	return &pager
 }
@@ -569,7 +572,9 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			select {
 			case <-p.readerSwitched:
 				// A different reader is now active
-				p.filter = search.Search{}
+				p.filter = search.Search{
+					Cache: p.searchCache,
+				}
 
 				p.readerLock.Lock()
 				r = p.readers[p.currentReader]
@@ -795,8 +800,11 @@ func (p *Pager) fitsOnOneScreen() bool {
 
 	lines := reader.GetLines(linemetadata.Index{}, reader.GetLineCount())
 	for _, line := range lines.Lines {
-		rendered := line.HighlightedTokens(twin.StyleDefault, twin.StyleDefault, search.Search{}, width+1).StyledRunes
-		if len(rendered) > width {
+		rendered, _ := line.HighlightedTokens(
+			twin.StyleDefault, twin.StyleDefault, search.Search{
+				Cache: p.searchCache,
+			}, width+1)
+		if len(rendered.StyledRunes) > width {
 			// This line is too long to fit on one screen line, no fit
 			return false
 		}

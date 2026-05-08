@@ -6,6 +6,8 @@ import (
 	"unicode"
 
 	"github.com/charlievieth/strcase"
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/util"
 )
 
 type Search struct {
@@ -17,6 +19,8 @@ type Search struct {
 	hasUppercase bool
 
 	pattern *regexp.Regexp
+
+	Cache *SearchCache
 }
 
 func (search Search) Equals(other Search) bool {
@@ -113,9 +117,19 @@ func (search Search) Matches(line string) bool {
 }
 
 // getMatchRanges locates one or more regexp matches in a string
-func (search Search) GetMatchRanges(String string) *MatchRanges {
+func (search Search) GetMatchRanges(String string, idx linemetadata.Index) MatchRanges {
+	if len(String) > 100000 {
+		defer util.LogDuration("GetMatchRanges")()
+	}
+
 	if search.Inactive() {
-		return nil
+		return MatchRanges{}
+	}
+
+	// Check the cache
+	res, pres := search.Cache.Get(idx, search.findMe)
+	if pres {
+		return res
 	}
 
 	if !search.hasUppercase {
@@ -124,9 +138,12 @@ func (search Search) GetMatchRanges(String string) *MatchRanges {
 		String = strings.ToLower(String)
 	}
 
-	return &MatchRanges{
+	res = MatchRanges{
 		Matches: toRunePositions(search.pattern.FindAllStringIndex(String, -1), String),
 	}
+	search.Cache.Set(idx, search.findMe, res)
+
+	return res
 }
 
 // Convert byte indices to rune indices

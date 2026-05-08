@@ -44,7 +44,9 @@ func (m *PagerModeFilter) onKey(key twin.KeyCode) {
 
 	case twin.KeyEscape:
 		m.pager.mode = PagerModeViewing{pager: m.pager}
-		m.pager.filter = search.Search{}
+		m.pager.filter = search.Search{
+			Cache: m.pager.searchCache,
+		}
 		m.pager.search.Clear()
 
 	case twin.KeyUp, twin.KeyDown, twin.KeyPgUp, twin.KeyPgDown:

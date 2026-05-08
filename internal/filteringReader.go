@@ -275,5 +275,5 @@ func (f *FilteringReader) SetBackingReader(r reader.Reader) {
 	// Invalidate caches so they will be rebuilt lazily on next access.
 	f.filteredLinesCache = nil
 	f.unfilteredLineCountWhenCaching = -1
-	f.filterWhenCaching = search.Search{}
+	f.filterWhenCaching = search.Search{Cache: search.NewSearchCache()}
 }
