@@ -73,6 +73,8 @@ type Reader interface {
 	// When we're not paused, the number will be constantly changing, indicating
 	// that the counting is not done yet.
 	ShouldShowLineCount() bool
+
+	Fingerprint() string
 }
 
 // ReaderImpl reads a file into an array of strings.
@@ -119,6 +121,8 @@ type ReaderImpl struct {
 
 	highlightingStyle chan chroma.Style
 
+	version int
+
 	// This channel expects to be read exactly once. All other uses will lead to
 	// undefined behavior.
 	doneWaitingForFirstByte chan bool
@@ -147,6 +151,18 @@ type ReaderImpl struct {
 
 	// Set to true when this reader is discarded.
 	closed atomic.Bool
+}
+
+func (reader *ReaderImpl) Fingerprint() string {
+	return fmt.Sprintf("%v:%v:%v:%v:%v",
+		// These are pointers to strings so their address is
+		// immutable.
+		reader.FileName,
+		reader.DisplayName,
+
+		reader.HighlightingDone.Load(),
+		reader.ReadingDone.Load(),
+		reader.version)
 }
 
 // InputLines contains a number of lines from the reader, plus metadata
@@ -552,6 +568,7 @@ func (reader *ReaderImpl) setText(text string) {
 
 	reader.Lock()
 	reader.lines = lines
+	reader.version++
 	reader.Unlock()
 
 	log.Trace("Reader done, contents explicitly set")

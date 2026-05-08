@@ -39,6 +39,13 @@ type FilteringReader struct {
 	filterWhenCaching search.Search
 }
 
+func (f *FilteringReader) Fingerprint() string {
+	return fmt.Sprintf("%v:%v",
+		f.BackingReader.Fingerprint(),
+		f.Filter.Fingerprint(),
+	)
+}
+
 // Please hold the lock when calling this method.
 //
 // This method requires f.Filter.Active() to be true on entry.

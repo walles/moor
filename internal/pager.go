@@ -145,8 +145,7 @@ type Pager struct {
 // of the pager. This is used to cache the state.
 func (p *Pager) Fingerprint() string {
 	w, h := p.screen.Size()
-
-	return fmt.Sprintf("%v:%v:%v:%v:%v:%v:%v:%v:%v",
+	return fmt.Sprintf("%v:%v:%v:%v:%v:%v:%v:%v:%v:%v",
 		p.search.Fingerprint(),
 		p.filter.Fingerprint(),
 		p.WrapLongLines,
@@ -154,6 +153,7 @@ func (p *Pager) Fingerprint() string {
 		p.isShowingHelp,
 		p.leftColumnZeroBased,
 		p.TabSize,
+		p.Reader().Fingerprint(),
 		w,
 		h,
 	)
