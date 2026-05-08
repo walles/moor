@@ -146,11 +146,12 @@ type Pager struct {
 func (p *Pager) Fingerprint() string {
 	w, h := p.screen.Size()
 
-	return fmt.Sprintf("%v:%v:%v:%v:%v:%v:%v:%v",
+	return fmt.Sprintf("%v:%v:%v:%v:%v:%v:%v:%v:%v",
 		p.search.Fingerprint(),
 		p.filter.Fingerprint(),
 		p.WrapLongLines,
 		p.showLineNumbers,
+		p.isShowingHelp,
 		p.leftColumnZeroBased,
 		p.TabSize,
 		w,
