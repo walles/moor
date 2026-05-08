@@ -8,6 +8,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"time"
@@ -396,6 +397,9 @@ func pagerFromArgs(
 	debug := flagSet.Bool("debug", false, "Print debug logs after exiting")
 	trace := flagSet.Bool("trace", false, "Print trace logs after exiting")
 
+	profile_file := flagSet.String("profile", "", "Path to write profile information")
+	lru_size := flagSet.Int("lru_size", 100, "Size of the LRU for the page cache")
+
 	wrap := flagSet.Bool("wrap", false, "Wrap long lines")
 	follow := flagSet.Bool("follow", false, "Follow piped input just like \"tail -f\"")
 	styleOption := flagSetFunc(flagSet,
@@ -639,6 +643,8 @@ func pagerFromArgs(
 	pager.SideScrollAmount = int(*shift)
 	pager.TabSize = int(*tabSize)
 	pager.WithSearchHitLineBackground = !*noSearchLineHighlight
+	pager.ProfileFile = *profile_file
+	pager.LRUSize = *lru_size
 
 	pager.TargetLine = targetLine
 	if *follow && pager.TargetLine == nil {
@@ -701,6 +707,19 @@ func main() {
 	if pager == nil {
 		// No pager, we're done
 		return
+	}
+
+	if pager.ProfileFile != "" {
+		fd, err := os.Create(pager.ProfileFile)
+		if err != nil {
+			log.Debug("Unable to create profile file", pager.ProfileFile, err)
+
+		} else {
+			err = pprof.StartCPUProfile(fd)
+			if err == nil {
+				defer pprof.StopCPUProfile()
+			}
+		}
 	}
 
 	startPaging(pager, screen, &style, formatter)

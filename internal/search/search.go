@@ -19,6 +19,10 @@ type Search struct {
 	pattern *regexp.Regexp
 }
 
+func (search Search) Fingerprint() string {
+	return search.findMe
+}
+
 func (search Search) Equals(other Search) bool {
 	return search.findMe == other.findMe
 }
@@ -124,9 +128,10 @@ func (search Search) GetMatchRanges(String string) *MatchRanges {
 		String = strings.ToLower(String)
 	}
 
-	return &MatchRanges{
+	res := &MatchRanges{
 		Matches: toRunePositions(search.pattern.FindAllStringIndex(String, -1), String),
 	}
+	return res
 }
 
 // Convert byte indices to rune indices

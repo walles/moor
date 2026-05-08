@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/chroma/v2"
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
@@ -124,6 +125,10 @@ type Pager struct {
 	// actual hits)
 	WithSearchHitLineBackground bool
 
+	LRUSize int
+
+	ProfileFile string
+
 	// Length of the longest line displayed. This is used for limiting scrolling
 	// to the right.
 	longestLineLength int
@@ -132,6 +137,25 @@ type Pager struct {
 	//
 	// Ref: https://github.com/walles/moor/issues/175
 	bookmarks map[rune]scrollPosition
+
+	cache *simplelru.LRU[string, []renderedLine]
+}
+
+// Get a unique fingerprint representing the current immutable state
+// of the pager. This is used to cache the state.
+func (p *Pager) Fingerprint() string {
+	w, h := p.screen.Size()
+
+	return fmt.Sprintf("%v:%v:%v:%v:%v:%v:%v:%v",
+		p.search.Fingerprint(),
+		p.filter.Fingerprint(),
+		p.WrapLongLines,
+		p.showLineNumbers,
+		p.SideScrollAmount,
+		p.TabSize,
+		w,
+		h,
+	)
 }
 
 type _PreHelpState struct {

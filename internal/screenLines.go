@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/hashicorp/golang-lru/v2/simplelru"
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
@@ -214,6 +215,35 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 // lineNumber and numberPrefixLength are required for knowing how much to
 // indent, and to (optionally) render the line number.
 func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, highlightSearchHitLines bool) []renderedLine {
+	key := fmt.Sprintf("%v:%v:%v:%v",
+		line.Index,
+		numberPrefixLength,
+		highlightSearchHitLines,
+		p.Fingerprint(),
+	)
+	if p.cache == nil {
+		p.clearCache()
+	}
+
+	res, ok := p.cache.Get(key)
+	if ok {
+		return res
+	}
+
+	res = p._renderLine(line, numberPrefixLength, highlightSearchHitLines)
+	p.cache.Add(key, res)
+	return res
+}
+
+func (p *Pager) clearCache() {
+	lru_size := p.LRUSize
+	if lru_size == 0 {
+		lru_size = 100
+	}
+	p.cache, _ = simplelru.NewLRU[string, []renderedLine](lru_size, nil)
+}
+
+func (p *Pager) _renderLine(line reader.NumberedLine, numberPrefixLength int, highlightSearchHitLines bool) []renderedLine {
 	width, _ := p.screen.Size()
 	var wrapped []textstyles.StyledRunesWithTrailer
 	var highlighted textstyles.StyledRunesWithTrailer
