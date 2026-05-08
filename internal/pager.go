@@ -151,7 +151,7 @@ func (p *Pager) Fingerprint() string {
 		p.filter.Fingerprint(),
 		p.WrapLongLines,
 		p.showLineNumbers,
-		p.SideScrollAmount,
+		p.leftColumnZeroBased,
 		p.TabSize,
 		w,
 		h,
