@@ -354,7 +354,7 @@ func (p *Pager) scrollToEnd() {
 
 	// Scroll down enough. We know for sure the last line won't wrap into more
 	// lines than the number of characters it contains.
-	p.scrollPosition.internalDontTouch.delta = linemetadata.ScreenLines(len(lastInputLine.Line.Plain(lastInputIndex)))
+	p.scrollPosition.internalDontTouch.delta = linemetadata.ScreenLines(len(lastInputLine.Line.Plain(lastInputIndex, 0)))
 
 	if p.TargetLine == nil {
 		// Start following the end of the file

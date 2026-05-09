@@ -15,7 +15,7 @@ type NumberedLine struct {
 }
 
 func (nl *NumberedLine) Plain() string {
-	return nl.Line.Plain(nl.Index)
+	return nl.Line.Plain(nl.Index, 0)
 }
 
 // maxTokensCount: at most this many tokens will be included in the result. If

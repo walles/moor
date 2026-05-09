@@ -82,7 +82,7 @@ func TestTokenize(t *testing.T) {
 				log.SetOutput(&loglines)
 
 				tokens := StyledRunesFromString(twin.StyleDefault, line, lineIndex, 0).StyledRunes
-				plainString := StripFormatting(line, *lineIndex)
+				plainString := StripFormatting(line, *lineIndex, 0)
 				if len(tokens) != utf8.RuneCountInString(plainString) {
 					t.Errorf("%s:%s: len(tokens)=%d, len(plainString)=%d for: <%s>",
 						fileName, lineIndex.Format(),
@@ -398,7 +398,7 @@ func BenchmarkStripFormatting(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, line := range lines {
 			// We ignore the output; benchmarking execution time only
-			_ = StripFormatting(line, linemetadata.Index{})
+			_ = StripFormatting(line, linemetadata.Index{}, 0)
 		}
 	}
 }
@@ -418,7 +418,7 @@ func BenchmarkStripFormattingUnformattedInput(b *testing.B) {
 	var unformatted strings.Builder
 	formattedLines := strings.Split(string(data), "\n")
 	for _, line := range formattedLines {
-		unformatted.WriteString(StripFormatting(line, linemetadata.Index{}))
+		unformatted.WriteString(StripFormatting(line, linemetadata.Index{}, 0))
 		unformatted.WriteString("\n")
 	}
 
@@ -429,7 +429,7 @@ func BenchmarkStripFormattingUnformattedInput(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		for _, line := range lines {
 			// We ignore the output; benchmarking execution time only
-			_ = StripFormatting(line, linemetadata.Index{})
+			_ = StripFormatting(line, linemetadata.Index{}, 0)
 		}
 	}
 }

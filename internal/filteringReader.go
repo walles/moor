@@ -88,7 +88,7 @@ func (f *FilteringReader) rebuildCache() {
 
 			for j := start; j < end; j++ {
 				line := lineCache.GetLine(f.BackingReader, linemetadata.IndexFromZeroBased(j), SearchDirectionForward)
-				matches[j] = filter.Matches(line.Line.Plain(line.Index))
+				matches[j] = filter.Matches(line.Line.Plain(line.Index, 0))
 			}
 		}(i)
 	}

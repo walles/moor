@@ -26,7 +26,7 @@ func (line *Line) HighlightedTokens(
 	lineIndex linemetadata.Index,
 	maxTokensCount int,
 ) textstyles.StyledRunesWithTrailer {
-	matchRanges := search.GetMatchRanges(line.Plain(lineIndex))
+	matchRanges := search.GetMatchRanges(line.Plain(lineIndex, maxTokensCount))
 
 	fromString := textstyles.StyledRunesFromString(plainTextStyle, string(line.raw), &lineIndex, maxTokensCount)
 	returnRunes := make([]textstyles.CellWithMetadata, 0, len(fromString.StyledRunes))
@@ -61,21 +61,35 @@ func (line *Line) HasManPageFormatting() bool {
 
 // The index is for error reporting. Set withCache to false to simulate a cache
 // miss for benchmarking.
-func (line *Line) Plain(index linemetadata.Index) string {
+//
+// maxTokensCount: at most this many runes will be included in the result. If
+// 0, do all runes. For BenchmarkRenderHugeLine() performance.
+func (line *Line) Plain(index linemetadata.Index, maxTokensCount int) string {
 	fromCache := line.plainTextCache.Load()
 	if DisablePlainCachingForBenchmarking {
 		// Simulate a cache miss for benchmarking
 		fromCache = nil
 	}
 	if fromCache != nil {
+		if maxTokensCount > 0 {
+			runeCount := 0
+			for byteIndex := range *fromCache {
+				if runeCount == maxTokensCount {
+					return (*fromCache)[:byteIndex]
+				}
+				runeCount++
+			}
+		}
 		return *fromCache
 	}
 
-	plain := textstyles.StripFormatting(string(line.raw), index)
+	plain := textstyles.StripFormatting(string(line.raw), index, maxTokensCount)
 
-	// If this succeeds, all good. If it fails it means some other goroutine
-	// populated the cache before us, which is also fine.
-	_ = line.plainTextCache.CompareAndSwap(nil, &plain)
+	if maxTokensCount == 0 {
+		// If this succeeds, all good. If it fails it means some other goroutine
+		// populated the cache before us, which is also fine.
+		_ = line.plainTextCache.CompareAndSwap(nil, &plain)
+	}
 
 	return plain
 }

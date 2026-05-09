@@ -53,9 +53,21 @@ func isPlain(s string) bool {
 	return true
 }
 
-// lineIndex is only used for error reporting
-func StripFormatting(s string, lineIndex linemetadata.Index) string {
+// lineIndex is only used for error reporting.
+//
+// maxTokensCount: at most this many tokens will be included in the result. If
+// 0, do all runes. For BenchmarkRenderHugeLine() performance.
+func StripFormatting(s string, lineIndex linemetadata.Index, maxTokensCount int) string {
 	if isPlain(s) {
+		if maxTokensCount > 0 {
+			runeCount := 0
+			for byteIndex := range s {
+				if runeCount == maxTokensCount {
+					return s[:byteIndex]
+				}
+				runeCount++
+			}
+		}
 		return s
 	}
 
@@ -63,7 +75,7 @@ func StripFormatting(s string, lineIndex linemetadata.Index) string {
 	stripped.Grow(len(s)) // This makes BenchmarkStripFormatting 6% faster
 	runeCount := 0
 
-	styledStringsFromString(twin.StyleDefault, s, &lineIndex, 0, func(str string, style twin.Style) {
+	styledStringsFromString(twin.StyleDefault, s, &lineIndex, maxTokensCount, func(str string, style twin.Style) {
 		for _, runeValue := range runesFromStyledString(_StyledString{String: str, Style: style}) {
 			switch runeValue {
 
