@@ -3,6 +3,7 @@ package reader
 // This file contains the logic for file watching and tailing appended bytes.
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -44,6 +45,7 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	reader.Lock()
 	reader.lines = reader.lines[:0]
 	reader.bytesCount = 0
+	reader.headerBytes = nil
 	reader.endsWithNewline = false
 	reader.Err = nil
 	if newStat != nil {
@@ -136,12 +138,51 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 	return true, nil
 }
 
+// fileShouldBeReloaded checks if the file's current starting bytes still match the
+// headerBytes we recorded originally. Returns true if they differ (file was
+// rewritten) or if we are unsure due to errors.
+func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
+	if len(headerBytes) == 0 {
+		// We have no baseline to compare against (e.g., initially empty file).
+		//
+		// We safely return false here to allow it to be appended to (e.g. 0 ->
+		// 123). If we returned true, an empty file that hasn't changed (0 -> 0)
+		// would cause an infinite reload loop, and growing files would be
+		// wastefully reloaded.
+		return false
+	}
+
+	file, err := os.Open(fileName)
+	if err != nil {
+		// Stat() succeeded just microseconds ago. If we can't open it now, the
+		// file was likely deleted, rotated, or permissions changed. Safest to
+		// reload.
+		return true
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debugf("Failed to close file %s after checking matching bytes boundary: %s", fileName, closeErr.Error())
+		}
+	}()
+
+	checkBuf := make([]byte, len(headerBytes))
+	if _, err := file.ReadAt(checkBuf, 0); err != nil {
+		// Stat() passed the old size check, but reading the boundary failed
+		// (e.g. io.EOF). This means the file was likely truncated *during* this
+		// polling cycle. Safest to reload.
+		return true
+	}
+
+	return !bytes.Equal(checkBuf, headerBytes)
+}
+
 func determineTailAction(
 	fileName string,
 	isCompressed bool,
 	oldStat os.FileInfo,
 	newStat os.FileInfo,
 	statErr error,
+	headerBytes []byte,
 ) tailAction {
 	if statErr != nil {
 		log.Debugf("Failed to stat file %s while tailing, giving up: %s", fileName, statErr.Error())
@@ -166,14 +207,25 @@ func determineTailAction(
 			log.Debugf("Compressed file %s grew, reloading", fileName)
 			return tailActionReload
 		}
-		log.Debugf("File %s grew from %d to %d bytes, appending", fileName, oldSize, newSize)
+
+		if fileShouldBeReloaded(fileName, headerBytes) {
+			log.Debugf("File %s boundary bytes changed (likely rewritten) while growing, reloading", fileName)
+			return tailActionReload
+		}
+
+		log.Debugf("File %s grew from %d to %d bytes (boundary OK), appending", fileName, oldSize, newSize)
 		return tailActionAppend
 	}
 
 	// Invariant: File size unchanged
 
 	if newStat.ModTime().After(oldStat.ModTime()) {
-		log.Debugf("File %s was updated/rotated but size is unchanged, reloading", fileName)
+		log.Debugf("File %s got a new timestamp but size is unchanged, reloading", fileName)
+		return tailActionReload
+	}
+
+	if fileShouldBeReloaded(fileName, headerBytes) {
+		log.Debugf("File %s changed, reloading", fileName)
 		return tailActionReload
 	}
 
@@ -191,6 +243,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	fileName := reader.FileName
 	isCompressed := reader.IsCompressed
 	bytesCount := reader.bytesCount
+	headerBytes := reader.headerBytes
 	oldStat := reader.lastStat
 	reader.RUnlock()
 
@@ -199,7 +252,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	}
 
 	newStat, statErr := os.Stat(*fileName)
-	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr)
+	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, headerBytes)
 
 	switch action {
 	case tailActionStop:

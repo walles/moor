@@ -107,6 +107,10 @@ type ReaderImpl struct {
 	// on disk), as they represent different metrics.
 	bytesCount int64
 
+	// The first bytes read from the file. Used to determine if the file was replaced
+	// or appended to when it grows.
+	headerBytes []byte
+
 	endsWithNewline bool
 
 	Err error
