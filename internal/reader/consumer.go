@@ -228,6 +228,9 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 	if reader.FileName != nil {
 		reader.Lock()
 		reader.bytesCount += inspectionReader.bytesCount
+		if len(reader.headerBytes) == 0 && len(inspectionReader.headerBytes) > 0 {
+			reader.headerBytes = append([]byte(nil), inspectionReader.headerBytes...)
+		}
 		reader.Unlock()
 	}
 

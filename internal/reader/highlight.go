@@ -86,8 +86,10 @@ func highlightFromMemory(reader *ReaderImpl, formatter chroma.Formatter, options
 		return
 	}
 
-	if options.Lexer == nil && json.Valid([]byte(text)) {
-		log.Info("Buffer is valid JSON, highlighting as JSON")
+	if options.Lexer == nil && isJsonOrJsonl(text) {
+		log.Info("Buffer is valid JSON or JSONL, highlighting as JSON")
+		// The Chroma JSON lexer natively supports JSONL as well:
+		// https://github.com/alecthomas/chroma/pull/1262
 		options.Lexer = lexers.Get("json")
 	} else if options.Lexer == nil && isXml(text) {
 		log.Info("Buffer is valid XML, highlighting as XML")
@@ -159,4 +161,17 @@ func textAsString(reader *ReaderImpl, shouldFormat bool) string {
 func isXml(text string) bool {
 	err := xml.Unmarshal([]byte(text), new(any))
 	return err == nil
+}
+
+func isJsonOrJsonl(text string) bool {
+	if json.Valid([]byte(text)) {
+		return true
+	}
+
+	// It might be jsonl so we split the first line only.
+	lines := strings.SplitN(text, "\n", 2)
+	if len(lines) > 0 && len(lines[0]) > 2 && lines[0][0] == '{' {
+		return json.Valid([]byte(lines[0]))
+	}
+	return false
 }

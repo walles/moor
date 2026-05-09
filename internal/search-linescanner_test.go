@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -162,4 +163,32 @@ func BenchmarkPlainTextColdSearch(b *testing.B) {
 // Run with: go test -run='^$' -bench=. . ./...
 func BenchmarkPlainTextWarmSearch(b *testing.B) {
 	benchmarkSearch(b, false, true)
+}
+
+func TestFindFirstHitGoroutineLeak(t *testing.T) {
+	if runtime.NumCPU() < 2 {
+		t.Skip("Need at least 2 CPUs to test chunking/goroutine leakage")
+	}
+
+	var sb strings.Builder
+	sb.WriteString("MATCH\n")
+	for i := range 1000 {
+		fmt.Fprintf(&sb, "Line %d\n", i)
+	}
+
+	r := reader.NewFromTextForTesting("TestFindFirstHitGoroutineLeak", sb.String())
+	assert.NilError(t, r.Wait())
+
+	goroutinesBefore := runtime.NumGoroutine()
+
+	hit := FindFirstHit(r, search.For("MATCH"), linemetadata.Index{}, nil, SearchDirectionForward)
+	assert.Assert(t, hit.IsZero())
+
+	time.Sleep(100 * time.Millisecond) // Let abandoned chunks finish search and hit their channel writes
+
+	goroutinesAfter := runtime.NumGoroutine()
+
+	if goroutinesAfter > goroutinesBefore+1 { // +1 tolerance for unrelated runtime background threads
+		t.Errorf("Goroutine leak detected! Before: %d, After: %d", goroutinesBefore, goroutinesAfter)
+	}
 }
