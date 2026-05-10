@@ -143,6 +143,39 @@ func TestSearchHighlight(t *testing.T) {
 	)
 }
 
+// Make sure that a search hit spanning the screen edge gets highlighted
+func TestSearchHighlightTruncated(t *testing.T) {
+	// Row contents longer than the screen width
+	numberedLine := reader.NewFromTextForTesting("TestSearchHighlightTruncated", "1234abcdef").GetLine(linemetadata.Index{})
+	pager := Pager{
+		screen: twin.NewFakeScreen(6, 10),
+		search: search.For("abcde"),
+	}
+
+	rendered := pager.renderLine(*numberedLine, pager.getLineNumberPrefixLength(numberedLine.Number), true)
+
+	assert.Equal(t, len(rendered), 1) // No wrapping
+	row := rendered[0]
+
+	assert.Equal(t, len(row.cells), 6) // 1234a> (last being the scroll-right marker)
+
+	expected := []textstyles.CellWithMetadata{
+		{Rune: '1'},
+		{Rune: '2'},
+		{Rune: '3'},
+		{Rune: '4'},
+		{Rune: 'a', IsSearchHit: true, StartsSearchHit: true},
+		{Rune: pager.ScrollRightHint.Rune},
+	}
+
+	for i, actualCell := range row.cells {
+		expectedCell := expected[i]
+		if actualCell.Rune != expectedCell.Rune || actualCell.IsSearchHit != expectedCell.IsSearchHit || actualCell.StartsSearchHit != expectedCell.StartsSearchHit {
+			t.Fatalf("Cell %d mismatch, got\n%#v, want\n%#v", i, actualCell, expectedCell)
+		}
+	}
+}
+
 func TestOverflowDown(t *testing.T) {
 	pager := Pager{
 		screen: twin.NewFakeScreen(
@@ -433,6 +466,8 @@ func BenchmarkRenderLines(b *testing.B) {
 
 // Inspired by https://github.com/walles/moor/issues/358
 func BenchmarkRenderHugeLine(b *testing.B) {
+	log.SetLevel(log.WarnLevel) // Stop info logs from polluting benchmark output
+
 	const megabytes = 5
 	builder := strings.Builder{}
 	for builder.Len() < megabytes*1024*1024 {
@@ -445,6 +480,34 @@ func BenchmarkRenderHugeLine(b *testing.B) {
 		builder.String())
 	pager := NewPager(input)
 	pager.screen = twin.NewFakeScreen(80, 25)
+
+	assert.NilError(b, input.Wait())
+
+	pager.renderLines() // Warm up
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		pager.renderLines()
+	}
+}
+
+// See https://github.com/walles/moor/issues/412
+func BenchmarkRenderHugeLineWithSearch(b *testing.B) {
+	log.SetLevel(log.WarnLevel) // Stop info logs from polluting benchmark output
+
+	const megabytes = 5
+	builder := strings.Builder{}
+	for builder.Len() < megabytes*1024*1024 {
+		builder.WriteString("Romani ite domum. ")
+	}
+	b.SetBytes(int64(builder.Len()))
+
+	input := reader.NewFromTextForTesting(
+		"BenchmarkRenderHugeLineWithSearch()",
+		builder.String())
+	pager := NewPager(input)
+	pager.screen = twin.NewFakeScreen(80, 25)
+	pager.search = search.For("domum")
 
 	assert.NilError(b, input.Wait())
 
