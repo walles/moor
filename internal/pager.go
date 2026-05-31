@@ -98,6 +98,9 @@ type Pager struct {
 	// Ref: https://github.com/walles/moor/issues/113
 	QuitIfOneScreen bool
 
+	// Search for this string on startup.
+	InitialSearch string
+
 	// Ref: https://github.com/walles/moor/issues/94
 	ScrollLeftHint  textstyles.CellWithMetadata
 	ScrollRightHint textstyles.CellWithMetadata
@@ -546,6 +549,14 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	// Make sure the reader knows how many lines we want
 	p.setTargetLine(p.TargetLine)
+	if p.InitialSearch != "" {
+		p.search.For(p.InitialSearch)
+		p.searchHistory.addEntry(p.InitialSearch)
+
+		reallyHigh := linemetadata.IndexMax()
+		p.setTargetLine(&reallyHigh)
+		p.scrollToSearchHits()
+	}
 
 	go func() {
 		defer func() {

@@ -433,6 +433,7 @@ func pagerFromArgs(
 	reFormat := flagSet.Bool("reformat", false, "Reformat some input files (JSON)")
 	flagSet.Bool("no-reformat", true, "No effect, kept for compatibility. See --reformat")
 	quitIfOneScreen := flagSet.Bool("quit-if-one-screen", false, "Don't page if contents fits on one screen. Affected by --no-clear-on-exit-margin.")
+	initialSearch := flagSet.String("search", "", "Search for `pattern` on startup")
 	noClearOnExit := flagSet.Bool("no-clear-on-exit", false, "Retain screen contents when exiting moor")
 	noClearOnExitMargin := flagSet.Int("no-clear-on-exit-margin", 1,
 		"Number of lines to leave for your shell prompt, defaults to 1")
@@ -645,6 +646,7 @@ func pagerFromArgs(
 	pager.DeInit = !*noClearOnExit
 	pager.DeInitFalseMargin = *noClearOnExitMargin
 	pager.QuitIfOneScreen = *quitIfOneScreen
+	pager.InitialSearch = *initialSearch
 	pager.StatusBarStyle = *statusBarStyle
 	pager.UnprintableStyle = *unprintableStyle
 	pager.WithTerminalFg = *terminalFg

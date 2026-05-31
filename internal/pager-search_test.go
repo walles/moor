@@ -190,6 +190,23 @@ func Test152(t *testing.T) {
 	assert.Equal(t, 2, pager.lineIndex().Index())
 }
 
+func TestInitialSearch(t *testing.T) {
+	reader := reader.NewFromTextForTesting("", "alpha\nneedle\nomega\n")
+	screen := twin.NewFakeScreen(20, 5)
+	pager := NewPager(reader)
+	pager.InitialSearch = "needle"
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+
+	pager.Quit()
+	pager.StartPaging(screen, nil, nil)
+	pager.redraw("")
+
+	assert.Equal(t, pager.search.String(), "needle")
+	assert.Equal(t, true, pager.searchHitIsVisible())
+	assert.Equal(t, "Viewing", modeName(pager))
+}
+
 func TestScrollLeftToSearchHits_NoLineNumbers(t *testing.T) {
 	reader := reader.NewFromTextForTesting("", "a234567890")
 	screen := twin.NewFakeScreen(10, 5)

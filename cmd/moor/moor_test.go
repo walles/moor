@@ -45,6 +45,21 @@ func TestPageOneInputFile(t *testing.T) {
 	assert.Assert(t, formatter != nil)
 }
 
+func TestSearchOption(t *testing.T) {
+	pager, _, _, _, _, err := pagerFromArgs(
+		[]string{"", "--search", "func TestSearchOption", "moor_test.go"},
+		func(_ twin.MouseMode, _ twin.ColorCount) (twin.Screen, error) {
+			return twin.NewFakeScreen(80, 24), nil
+		},
+		false, // stdin is redirected
+		false, // stdout is redirected
+	)
+
+	assert.NilError(t, err)
+	assert.Assert(t, pager != nil)
+	assert.Equal(t, pager.InitialSearch, "func TestSearchOption")
+}
+
 func TestGetTargetLine(t *testing.T) {
 	index, remaining := getTargetLine([]string{})
 	assert.Assert(t, index == nil)
