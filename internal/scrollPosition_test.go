@@ -243,13 +243,13 @@ func TestIssue415Panic(t *testing.T) {
 func TestIssue426(t *testing.T) {
 	// Create a small file with only 10 lines
 	smallContent := strings.Repeat("short\n", 10)
-	smallR := reader.NewFromTextForTesting("small", smallContent)
+	smallReader := reader.NewFromTextForTesting("small", smallContent)
 
-	assert.NilError(t, smallR.Wait())
+	assert.NilError(t, smallReader.Wait())
 
 	pager := Pager{
 		screen:         twin.NewFakeScreen(20, 10),
-		readers:        []*reader.ReaderImpl{smallR},
+		readers:        []*reader.ReaderImpl{smallReader},
 		currentReader:  0,
 		readerSwitched: make(chan struct{}, 1),
 	}
@@ -257,7 +257,7 @@ func TestIssue426(t *testing.T) {
 	pager.mode = PagerModeViewing{&pager}
 
 	pager.filteringReader = FilteringReader{
-		BackingReader: smallR,
+		BackingReader: smallReader,
 		Filter:        &pager.filter,
 	}
 
