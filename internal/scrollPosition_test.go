@@ -268,9 +268,9 @@ func TestIssue426(t *testing.T) {
 	pager.scrollPosition.internalDontTouch.lineIndex = &seventy
 	pager.scrollPosition.internalDontTouch.delta = 0
 
-	// Set the canonical state to match the current pager state
-	// This tricks canonicalize() into thinking the position is already valid
-	// so it won't clamp the lineIndex, even though 70 > file's line count (10)
+	// Set the canonical state to match the current pager state. This tricks
+	// canonicalize() into thinking the position is already valid so it won't
+	// clamp the lineIndex, even though 70 > file's line count (10).
 	pager.scrollPosition.internalDontTouch.canonical = scrollPositionCanonical{
 		width:            20,
 		height:           10,
