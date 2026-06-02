@@ -1,13 +1,15 @@
 package internal
 
-import "github.com/walles/moor/v2/twin"
+import (
+	"github.com/walles/moor/v2/twin"
+)
 
 type PagerModeNotFound struct {
 	pager *Pager
 }
 
-func (m PagerModeNotFound) drawFooter(_ string, _ string, _ string) {
-	m.pager.setFooter("Not found: "+m.pager.search.String(), "", "", "")
+func (m PagerModeNotFound) drawFooter(_ string, _ string, _ []twin.StyledRune) {
+	m.pager.setFooter("Not found: "+m.pager.search.String(), "", "", nil, "")
 }
 
 func (m PagerModeNotFound) onKey(key twin.KeyCode) {

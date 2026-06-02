@@ -11,7 +11,7 @@ type PagerModeJumpToMark struct {
 	pager *Pager
 }
 
-func (m PagerModeJumpToMark) drawFooter(_ string, _ string, _ string) {
+func (m PagerModeJumpToMark) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	p := m.pager
 
 	_, screenHeight := p.ScreenSize()

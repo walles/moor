@@ -24,7 +24,7 @@ func NewPagerModeFilter(p *Pager) *PagerModeFilter {
 	return m
 }
 
-func (m PagerModeFilter) drawFooter(_ string, _ string, _ string) {
+func (m PagerModeFilter) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	m.inputBox.draw(m.pager.screen, "Type to filter, 'ENTER' submits, 'ESC' cancels", "Filter: ")
 }
 

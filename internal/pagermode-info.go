@@ -13,13 +13,13 @@ type PagerModeInfo struct {
 	logged bool
 }
 
-func (m *PagerModeInfo) drawFooter(_ string, _ string, _ string) {
+func (m *PagerModeInfo) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	if !m.logged {
 		log.Infof("Displaying info message to user: %q", m.Text)
 		m.logged = true
 	}
 
-	m.Pager.setFooter(m.Text, "", "", "")
+	m.Pager.setFooter(m.Text, "", "", nil, "")
 }
 
 func (m *PagerModeInfo) onKey(key twin.KeyCode) {

@@ -9,7 +9,7 @@ type PagerModeColonCommand struct {
 	pager *Pager
 }
 
-func (m *PagerModeColonCommand) drawFooter(_ string, _ string, _ string) {
+func (m *PagerModeColonCommand) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	p := m.pager
 	_, screenHeight := p.ScreenSize()
 	height := int(screenHeight)

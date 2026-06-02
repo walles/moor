@@ -11,6 +11,12 @@ import (
 	"github.com/walles/moor/v2/twin"
 )
 
+var doneSpinner = []twin.StyledRune{
+	{Rune: '-', Style: twin.StyleDefault},
+	{Rune: '-', Style: twin.StyleDefault},
+	{Rune: '-', Style: twin.StyleDefault},
+}
+
 type renderedLine struct {
 	// Certain lines are available for viewing. This index is the (zero based)
 	// position of this line among those.
@@ -41,7 +47,7 @@ type renderedScreen struct {
 
 // Refresh the whole pager display, both contents lines and the status line at
 // the bottom
-func (p *Pager) redraw(spinner string) {
+func (p *Pager) redraw(spinner []twin.StyledRune) {
 	log.Trace("redraw called")
 	p.screen.Clear()
 	p.longestLineLength = 0
@@ -59,14 +65,13 @@ func (p *Pager) redraw(spinner string) {
 	// Status line code follows
 
 	eofSpinner := spinner
-	if eofSpinner == "" {
+	if len(eofSpinner) == 0 {
 		// This happens when we're done
-		eofSpinner = "---"
+		eofSpinner = doneSpinner
 	}
-	spinnerLine := textstyles.StyledRunesFromString(statusbarStyle, eofSpinner, nil, 0).StyledRunes
 	column := 0
-	for _, cell := range spinnerLine {
-		column += p.screen.SetCell(column, lastUpdatedScreenLineNumber+1, cell.ToStyledRune())
+	for _, cell := range eofSpinner {
+		column += p.screen.SetCell(column, lastUpdatedScreenLineNumber+1, cell)
 	}
 
 	p.mode.drawFooter(renderedScreen.filenameText, renderedScreen.statusText, spinner)

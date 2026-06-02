@@ -19,7 +19,7 @@ import (
 type PagerMode interface {
 	onKey(key twin.KeyCode)
 	onRune(char rune)
-	drawFooter(filenameText string, statusText string, spinner string)
+	drawFooter(filenameText string, statusText string, spinner []twin.StyledRune)
 }
 
 type StatusBarOption int
@@ -34,7 +34,7 @@ const (
 )
 
 type eventSpinnerUpdate struct {
-	spinner string
+	spinner []twin.StyledRune
 }
 
 // Or we switched readers. Or something else happened that requires us to
@@ -334,7 +334,7 @@ func renderHelpText(help string) []twin.StyledRune {
 // filename example value: "file.txt"
 // status example value: ": 123 lines  0%"
 // help example value: "Press 'h' for help, 'q' to quit"
-func (p *Pager) setFooter(prefix string, filename string, status string, help string) {
+func (p *Pager) setFooter(prefix string, filename string, status string, spinner []twin.StyledRune, help string) {
 	width, height := p.screen.Size()
 
 	pos := 0
@@ -352,6 +352,14 @@ func (p *Pager) setFooter(prefix string, filename string, status string, help st
 	// percentage,
 	for _, token := range status + "  " {
 		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(token, statusbarStyle))
+	}
+
+	if len(spinner) > 0 {
+		for _, cell := range spinner {
+			pos += p.screen.SetCell(pos, height-1, cell)
+		}
+
+		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(' ', statusbarStyle))
 	}
 
 	// Help text, highlight keyboard shortcuts
@@ -552,10 +560,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			PanicHandler("StartPaging()/goroutine", recover(), debug.Stack())
 		}()
 
-		spinnerFrames := [...]string{"/.\\", "-o-", "\\O/", "| |"}
-		spinnerIndex := 0
 		spinnerTicker := time.NewTicker(200 * time.Millisecond)
-		lastSpinnerFrame := "UNSET" // Track the last spinner frame to avoid unnecessary redraws
 
 		// Support throttling of more-lines-available reads, see below
 		p.readerLock.Lock()
@@ -583,9 +588,6 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				throttledMoreLines = r.MoreLinesAdded
 				reenable = nil
 
-				// Reset spinner for new reader so that we show it again if needed
-				lastSpinnerFrame = "UNSET"
-
 				// Tell the viewer to replace the view
 				screen.Events() <- eventMoreLinesAvailable{}
 
@@ -603,24 +605,12 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				reenable = nil
 
 			case <-spinnerTicker.C:
-				currentSpinnerFrame := spinnerFrames[spinnerIndex]
-				if r.ReadingDone.Load() {
-					// We're done, clear the spinner
-					currentSpinnerFrame = ""
-				}
-
-				spinnerIndex++
-				if spinnerIndex >= len(spinnerFrames) {
-					spinnerIndex = 0
-				}
-
-				if currentSpinnerFrame == lastSpinnerFrame {
-					// Prevent unnecessary redraws
-					continue
+				currentSpinnerFrame := []twin.StyledRune{}
+				if !r.ReadingDone.Load() {
+					currentSpinnerFrame = getSpinnerFrame()
 				}
 
 				screen.Events() <- eventSpinnerUpdate{currentSpinnerFrame}
-				lastSpinnerFrame = currentSpinnerFrame
 
 			case <-r.MaybeDone:
 				screen.Events() <- eventMaybeDone{}
@@ -631,7 +621,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 	log.Info("Entering pager main loop...")
 
 	// Main loop
-	spinner := ""
+	spinner := []twin.StyledRune{}
 	for !p.quit {
 		if len(screen.Events()) == 0 {
 			// Nothing more to process for now, redraw the screen

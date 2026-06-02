@@ -1,12 +1,14 @@
 package internal
 
-import "github.com/walles/moor/v2/twin"
+import (
+	"github.com/walles/moor/v2/twin"
+)
 
 type PagerModeMark struct {
 	pager *Pager
 }
 
-func (m PagerModeMark) drawFooter(_ string, _ string, _ string) {
+func (m PagerModeMark) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	p := m.pager
 
 	_, screenHeight := p.ScreenSize()

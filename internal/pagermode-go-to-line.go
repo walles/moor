@@ -24,7 +24,7 @@ func NewPagerModeGotoLine(p *Pager) *PagerModeGotoLine {
 	return m
 }
 
-func (m *PagerModeGotoLine) drawFooter(_ string, _ string, _ string) {
+func (m *PagerModeGotoLine) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	m.inputBox.draw(m.pager.screen, "'ENTER' submits, 'ESC' cancels", "Go to line number: ")
 }
 

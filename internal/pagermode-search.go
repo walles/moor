@@ -44,7 +44,7 @@ func NewPagerModeSearch(p *Pager, direction SearchDirection, initialScrollPositi
 	return m
 }
 
-func (m PagerModeSearch) drawFooter(_ string, _ string, _ string) {
+func (m PagerModeSearch) drawFooter(_ string, _ string, _ []twin.StyledRune) {
 	prompt := "Search: "
 	if m.direction == SearchDirectionBackward {
 		prompt = "Search backwards: "
