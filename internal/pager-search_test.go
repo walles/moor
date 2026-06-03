@@ -116,7 +116,7 @@ func TestScrollToNextSearchHit_StartAtBottom(t *testing.T) {
 	pager.search.For("xxx")
 
 	// Scroll to the next search hit
-	pager.scrollToNextSearchHit()
+	pager.scrollToNextSearchHit(false)
 
 	assert.Equal(t, "NotFound", modeName(pager))
 }
@@ -129,7 +129,7 @@ func TestScrollToNextSearchHit_StartAtTop(t *testing.T) {
 	pager.search.For("xxx")
 
 	// Scroll to the next search hit
-	pager.scrollToNextSearchHit()
+	pager.scrollToNextSearchHit(false)
 
 	assert.Equal(t, "NotFound", modeName(pager))
 }
@@ -143,12 +143,12 @@ func TestScrollToNextSearchHit_WrapAfterNotFound(t *testing.T) {
 	pager.search.For("a")
 
 	// Scroll to the next search hit, this should take us into _NotFound
-	pager.scrollToNextSearchHit()
+	pager.scrollToNextSearchHit(false)
 	assert.Equal(t, "NotFound", modeName(pager))
 
 	// Scroll to the next search hit, this should wrap the search and take us to
 	// the top
-	pager.scrollToNextSearchHit()
+	pager.scrollToNextSearchHit(true)
 	assert.Equal(t, "Viewing", modeName(pager))
 	assert.Assert(t, pager.lineIndex().IsZero())
 }
@@ -162,12 +162,12 @@ func TestScrollToNextSearchHit_WrapAfterFound(t *testing.T) {
 	pager.search.For("f")
 
 	// Scroll to the next search hit, this should take us into _NotFound
-	pager.scrollToNextSearchHit()
+	pager.scrollToNextSearchHit(false)
 	assert.Equal(t, "NotFound", modeName(pager))
 
 	// Scroll to the next search hit, this should wrap the search and take us
 	// back to the bottom again
-	pager.scrollToNextSearchHit()
+	pager.scrollToNextSearchHit(true)
 	assert.Equal(t, "Viewing", modeName(pager))
 	assert.Equal(t, 4, pager.lineIndex().Index())
 }

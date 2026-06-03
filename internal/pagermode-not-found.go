@@ -1,6 +1,9 @@
 package internal
 
-import "github.com/walles/moor/v2/twin"
+import (
+	log "github.com/sirupsen/logrus"
+	"github.com/walles/moor/v2/twin"
+)
 
 type PagerModeNotFound struct {
 	pager *Pager
@@ -11,23 +14,41 @@ func (m PagerModeNotFound) drawFooter(_ string, _ string, _ string) {
 }
 
 func (m PagerModeNotFound) onKey(key twin.KeyCode) {
-	m.pager.mode = PagerModeViewing(m)
-	m.pager.mode.onKey(key)
+	action, found := m.pager.ModeBindings.NotFound.KeyCodeBindings[key]
+	if !found {
+		action, found = m.pager.ModeBindings.Viewing.KeyCodeBindings[key]
+	}
+	if found {
+		m.executeAction(action)
+		return
+	}
+	log.Debugf("Unhandled not-found key event %v", key)
 }
 
 func (m PagerModeNotFound) onRune(char rune) {
-	switch char {
+	action, found := m.pager.ModeBindings.NotFound.RuneBindings[char]
+	if !found {
+		action, found = m.pager.ModeBindings.Viewing.RuneBindings[char]
+	}
+	if found {
+		m.executeAction(action)
+		return
+	}
+	log.Debugf("Unhandled not-found rune '%s'/0x%08x", string(char), int32(char))
+}
 
-	// Should match the pagermode-viewing.go next-search-hit bindings
-	case 'n':
-		m.pager.scrollToNextSearchHit()
-
-	// Should match the pagermode-viewing.go previous-search-hit bindings
-	case 'p', 'N':
-		m.pager.scrollToPreviousSearchHit()
-
-	default:
+func (m PagerModeNotFound) executeAction(action Action) {
+	switch action {
+	case NextSearchHit:
 		m.pager.mode = PagerModeViewing(m)
-		m.pager.mode.onRune(char)
+		m.pager.scrollToNextSearchHit(true)
+	case PreviousSearchHit:
+		m.pager.mode = PagerModeViewing(m)
+		m.pager.scrollToPreviousSearchHit(true)
+	default:
+		// For all other actions, switch to viewing mode and execute there.
+		viewing := PagerModeViewing(m)
+		m.pager.mode = viewing
+		viewing.executeAction(action)
 	}
 }

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"strconv"
 
 	log "github.com/sirupsen/logrus"
@@ -15,17 +16,17 @@ type PagerModeGotoLine struct {
 
 func NewPagerModeGotoLine(p *Pager) *PagerModeGotoLine {
 	m := &PagerModeGotoLine{
-		pager: p,
-		inputBox: InputBox{
-			accept:        INPUTBOX_ACCEPT_POSITIVE_NUMBERS,
-			onTextChanged: nil,
-		},
+		pager:    p,
+		inputBox: *NewInputBox(INPUTBOX_ACCEPT_POSITIVE_NUMBERS, p.ModeBindings.Input),
 	}
 	return m
 }
 
 func (m *PagerModeGotoLine) drawFooter(_ string, _ string, _ string) {
-	m.inputBox.draw(m.pager.screen, "'ENTER' submits, 'ESC' cancels", "Go to line number: ")
+	acceptKey := keyForAction(m.pager.ModeBindings.GotoLine, Accept)
+	cancelKey := keyForAction(m.pager.ModeBindings.GotoLine, Cancel)
+	hint := fmt.Sprintf("'%s' submits, '%s' cancels", acceptKey, cancelKey)
+	m.inputBox.draw(m.pager.screen, hint, "Go to line number: ")
 }
 
 func (m *PagerModeGotoLine) updateLineNumber(text string) {
@@ -46,40 +47,62 @@ func (m *PagerModeGotoLine) updateLineNumber(text string) {
 	m.pager.setTargetLine(&targetIndex)
 }
 
+func (m *PagerModeGotoLine) executeAction(action Action) {
+	switch action {
+	case Accept:
+		m.updateLineNumber(m.inputBox.text)
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		return
+
+	case Cancel:
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		return
+
+	case GotoTop:
+		m.pager.scrollPosition = newScrollPosition("Pager scroll position")
+		m.pager.handleScrolledUp()
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		return
+
+	}
+
+	// Try common actions
+	if m.pager.executeCommonAction(action) {
+		return
+	}
+
+	// Action not handled
+	log.Debugf("Unhandled goto-line action: %v", action)
+}
+
 func (m *PagerModeGotoLine) onKey(key twin.KeyCode) {
+	p := m.pager
+
+	// Check keybindings first (priority over InputBox)
+	if action, found := p.ModeBindings.GotoLine.KeyCodeBindings[key]; found {
+		m.executeAction(action)
+		return
+	}
+
+	// Fall back to InputBox handling
 	if m.inputBox.handleKey(key) {
 		return
 	}
 
-	switch key {
-	case twin.KeyEnter:
-		m.updateLineNumber(m.inputBox.text)
-		m.pager.mode = PagerModeViewing{pager: m.pager}
-
-	case twin.KeyEscape:
-		m.pager.mode = PagerModeViewing{pager: m.pager}
-
-	default:
-		log.Tracef("Unhandled goto key event %v, treating as a viewing key event", key)
-		m.pager.mode = PagerModeViewing{pager: m.pager}
-		m.pager.mode.onKey(key)
-	}
+	// No action bound, fall through to viewing mode
+	log.Tracef("Unhandled goto-line key event %v, treating as a viewing key event", key)
+	p.mode = PagerModeViewing{pager: p}
+	p.mode.onKey(key)
 }
 
 func (m *PagerModeGotoLine) onRune(char rune) {
-	p := m.pager
-
-	if char == 'q' {
-		p.mode = PagerModeViewing{pager: p}
+	// Look up action from keybindings
+	action, found := m.pager.ModeBindings.GotoLine.RuneBindings[char]
+	if found {
+		m.executeAction(action)
 		return
 	}
 
-	if char == 'g' {
-		p.scrollPosition = newScrollPosition("Pager scroll position")
-		p.handleScrolledUp()
-		p.mode = PagerModeViewing{pager: p}
-		return
-	}
-
+	// Unbound rune - fallthrough to number input
 	m.inputBox.handleRune(char)
 }

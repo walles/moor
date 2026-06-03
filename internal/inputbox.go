@@ -29,9 +29,22 @@ type InputBox struct {
 	// onTextChanged is an optional callback which is triggered when the text
 	// of the InputBox changes.
 	onTextChanged InputBoxOnTextChanged
+
+	// bindings holds the key bindings for input operations
+	bindings KeyBindings[InputAction]
 }
 
-// draw renders the input box at the bottom line of the screen, showing a
+// NewInputBox creates an InputBox with the given accept mode and key bindings.
+// Prefer this over a struct literal: omitting bindings causes handleKey and
+// handleRune to silently do nothing for any bound action.
+func NewInputBox(accept AcceptMode, bindings KeyBindings[InputAction]) *InputBox {
+	return &InputBox{
+		accept:   accept,
+		bindings: bindings,
+	}
+}
+
+// draw renders the input box at the bottom line of the screen
 // simple prompt and the current text with a reverse attribute cursor.
 func (b *InputBox) draw(screen twin.Screen, keys_help string, prompt string) {
 	width, height := screen.Size()
@@ -104,43 +117,14 @@ func (b *InputBox) setText(text string) {
 }
 
 // handleRune appends runes to the text of the InputBox and returns if those have been processed.
-// (Some keyboards send 0x08 instead of backspace, so we support it here too).
 func (b *InputBox) handleRune(char rune) bool {
-	if char == '\x08' {
-		b.backspace()
-		return true
-	}
-	if char == '\x01' {
-		// Ctrl-A, move cursor to start
-		b.moveCursorHome()
-		return true
-	}
-	if char == '\x05' {
-		// Ctrl-E, move cursor to end
-		b.moveCursorEnd()
-		return true
-	}
-	if char == '\x02' {
-		// Ctrl-B, move cursor left
-		b.moveCursorLeft()
-		return true
-	}
-	if char == '\x06' {
-		// Ctrl-F, move cursor right
-		b.moveCursorRight()
-		return true
-	}
-	if char == '\x0b' {
-		// Ctrl-K, delete to end of line
-		b.deleteToEnd()
-		return true
-	}
-	if char == '\x15' {
-		// Ctrl-U, delete to start of line
-		b.deleteToStart()
+	// Check if there's a binding for this rune
+	if action, found := b.bindings.RuneBindings[char]; found {
+		b.executeInputAction(action)
 		return true
 	}
 
+	// Fallthrough: insert character
 	// If configured to accept numbers only, drop any non-digit rune.
 	if b.accept == INPUTBOX_ACCEPT_POSITIVE_NUMBERS {
 		if !unicode.IsDigit(char) {
@@ -177,32 +161,10 @@ func (b *InputBox) handleRune(char rune) bool {
 // handleKey processes special keys like backspace, delete, arrow keys, home and end.
 // Returns true if the key was processed, false otherwise.
 func (b *InputBox) handleKey(key twin.KeyCode) bool {
-	switch key {
-	case twin.KeyLeft:
-		b.moveCursorLeft()
-		return true
-
-	case twin.KeyRight:
-		b.moveCursorRight()
-		return true
-
-	case twin.KeyHome:
-		b.moveCursorHome()
-		return true
-
-	case twin.KeyEnd:
-		b.moveCursorEnd()
-		return true
-
-	case twin.KeyBackspace:
-		b.backspace()
-		return true
-
-	case twin.KeyDelete:
-		b.delete()
+	if action, found := b.bindings.KeyCodeBindings[key]; found {
+		b.executeInputAction(action)
 		return true
 	}
-
 	return false
 }
 
@@ -267,5 +229,29 @@ func (b *InputBox) delete() {
 		if b.onTextChanged != nil {
 			b.onTextChanged(b.text)
 		}
+	}
+}
+
+// executeInputAction executes the given input action
+func (b *InputBox) executeInputAction(action InputAction) {
+	switch action {
+	case NoInputAction:
+		return
+	case CursorLeft:
+		b.moveCursorLeft()
+	case CursorRight:
+		b.moveCursorRight()
+	case CursorHome:
+		b.moveCursorHome()
+	case CursorEnd:
+		b.moveCursorEnd()
+	case Backspace:
+		b.backspace()
+	case Delete:
+		b.delete()
+	case DeleteToEnd:
+		b.deleteToEnd()
+	case DeleteToStart:
+		b.deleteToStart()
 	}
 }

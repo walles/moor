@@ -9,7 +9,7 @@ import (
 
 func TestInsertAndBackspace(t *testing.T) {
 	screen := twin.NewFakeScreen(40, 2)
-	b := &InputBox{accept: INPUTBOX_ACCEPT_ALL}
+	b := NewInputBox(INPUTBOX_ACCEPT_ALL, DefaultModeBindings().Input)
 
 	assert.Assert(t, b.handleRune('a'))
 	assert.Assert(t, b.handleRune('b'))
@@ -28,7 +28,7 @@ func TestInsertAndBackspace(t *testing.T) {
 
 func TestCursorMovementAndInsertDelete(t *testing.T) {
 	screen := twin.NewFakeScreen(80, 2)
-	b := &InputBox{accept: INPUTBOX_ACCEPT_ALL}
+	b := NewInputBox(INPUTBOX_ACCEPT_ALL, DefaultModeBindings().Input)
 	b.handleRune('a')
 	b.handleRune('b')
 	b.handleRune('c')
@@ -59,8 +59,22 @@ func TestCursorMovementAndInsertDelete(t *testing.T) {
 	assert.Equal(t, "G: SaXcE", row)
 }
 
+func TestCtrlHBackspace(t *testing.T) {
+	// Some keyboards/terminals send 0x08 (ctrl-h) instead of the backspace key.
+	// Regression test: handleRune('\x08') must behave identically to a real backspace.
+	b := NewInputBox(INPUTBOX_ACCEPT_ALL, DefaultModeBindings().Input)
+
+	assert.Assert(t, b.handleRune('x'))
+	assert.Assert(t, b.handleRune('y'))
+	assert.Equal(t, "xy", b.text)
+
+	// ctrl-h should delete the last character
+	assert.Assert(t, b.handleRune('\x08'))
+	assert.Equal(t, "x", b.text)
+}
+
 func TestAcceptPositiveNumbers(t *testing.T) {
-	b := &InputBox{accept: INPUTBOX_ACCEPT_POSITIVE_NUMBERS}
+	b := NewInputBox(INPUTBOX_ACCEPT_POSITIVE_NUMBERS, DefaultModeBindings().Input)
 	assert.Assert(t, b.handleRune('1'))
 	assert.Assert(t, !b.handleRune('a'))
 	assert.Assert(t, b.handleRune('2'))
@@ -69,7 +83,7 @@ func TestAcceptPositiveNumbers(t *testing.T) {
 
 func TestUnicodeRunes(t *testing.T) {
 	screen := twin.NewFakeScreen(80, 2)
-	b := &InputBox{accept: INPUTBOX_ACCEPT_ALL}
+	b := NewInputBox(INPUTBOX_ACCEPT_ALL, DefaultModeBindings().Input)
 	// Insert a CJK char and an emoji
 	assert.Assert(t, b.handleRune('午'))
 	assert.Assert(t, b.handleRune('🧐'))

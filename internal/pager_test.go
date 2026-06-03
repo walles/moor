@@ -670,7 +670,7 @@ func testFooter(t *testing.T, filename string, contents string, expectedFooter s
 }
 
 func TestFooter(t *testing.T) {
-	help := "Press ESC / q to exit, / to search, & to filter, h for help"
+	help := "Press escape to exit, / to search, & to filter, h for help"
 
 	testFooter(t, "filename", "", "filename: <empty>  "+help)
 	testFooter(t, "", "", "<empty>  "+help)

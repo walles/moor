@@ -53,7 +53,7 @@ func TestViewingFooter_WithSpinner(t *testing.T) {
 	footer := rowToString(screen.GetRow(9))
 
 	// Quotes are stripped in rendering; expect plain keys
-	expectedHelp := "Press ESC / q to exit, / to search, & to filter, h for help"
+	expectedHelp := "Press escape to exit, / to search, & to filter, h for help"
 	expected := "1 line  100%  " + spinner + "  " + expectedHelp
 
 	assert.Equal(t, expected, footer)

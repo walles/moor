@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/twin"
 )
@@ -28,18 +30,16 @@ func NewPagerModeSearch(p *Pager, direction SearchDirection, initialScrollPositi
 		direction:             direction,
 		searchHistoryIndex:    len(p.searchHistory.entries), // Past the end
 	}
-	m.inputBox = &InputBox{
-		accept: INPUTBOX_ACCEPT_ALL,
-		onTextChanged: func(text string) {
-			m.pager.search.For(text)
+	m.inputBox = NewInputBox(INPUTBOX_ACCEPT_ALL, p.ModeBindings.Input)
+	m.inputBox.onTextChanged = func(text string) {
+		m.pager.search.For(text)
 
-			switch m.direction {
-			case SearchDirectionBackward:
-				m.pager.scrollToSearchHitsBackwards()
-			case SearchDirectionForward:
-				m.pager.scrollToSearchHits()
-			}
-		},
+		switch m.direction {
+		case SearchDirectionBackward:
+			m.pager.scrollToSearchHitsBackwards()
+		case SearchDirectionForward:
+			m.pager.scrollToSearchHits()
+		}
 	}
 	return m
 }
@@ -49,7 +49,13 @@ func (m PagerModeSearch) drawFooter(_ string, _ string, _ string) {
 	if m.direction == SearchDirectionBackward {
 		prompt = "Search backwards: "
 	}
-	m.inputBox.draw(m.pager.screen, "Type to search, 'ENTER' submits, 'ESC' cancels, '↑↓' navigate history", prompt)
+	acceptKey := keyForAction(m.pager.ModeBindings.Search, Accept)
+	cancelKey := keyForAction(m.pager.ModeBindings.Search, Cancel)
+	histPrevKey := keyForAction(m.pager.ModeBindings.Search, HistoryPrevious)
+	histNextKey := keyForAction(m.pager.ModeBindings.Search, HistoryNext)
+	hint := fmt.Sprintf("Type to search, '%s' submits, '%s' cancels, '%s'/'%s' navigate history",
+		acceptKey, cancelKey, histPrevKey, histNextKey)
+	m.inputBox.draw(m.pager.screen, hint, prompt)
 }
 
 func (m *PagerModeSearch) moveSearchHistoryIndex(delta int) {
@@ -74,54 +80,72 @@ func (m *PagerModeSearch) moveSearchHistoryIndex(delta int) {
 	}
 }
 
-// Exit search mode, skip back to where we started
-func (m *PagerModeSearch) abort() {
-	m.pager.searchHistory.addEntry(m.inputBox.text)
-	m.pager.mode = PagerModeViewing{pager: m.pager}
-	m.pager.scrollPosition = m.initialScrollPosition
-	m.pager.setTargetLine(nil) // Viewing doesn't need all lines
+func (m *PagerModeSearch) executeAction(action Action) {
+	// Handle search-specific actions first
+	switch action {
+	case Accept:
+		m.pager.searchHistory.addEntry(m.inputBox.text)
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
+		return
+
+	case Cancel:
+		m.pager.searchHistory.addEntry(m.inputBox.text)
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		m.pager.scrollPosition = m.initialScrollPosition
+		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
+		return
+
+	case ScrollPageUp, ScrollPageDown:
+		m.pager.searchHistory.addEntry(m.inputBox.text)
+		m.pager.mode = PagerModeViewing{pager: m.pager}
+		m.pager.executeCommonAction(action)
+		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
+		return
+
+	case HistoryPrevious:
+		m.moveSearchHistoryIndex(-1)
+		return
+
+	case HistoryNext:
+		m.moveSearchHistoryIndex(1)
+		return
+	}
+
+	// Try common actions
+	if m.pager.executeCommonAction(action) {
+		return
+	}
+
+	// Action not handled
+	log.Debugf("Unhandled search action %v", action)
 }
 
 func (m *PagerModeSearch) onKey(key twin.KeyCode) {
+	// Check keybindings first (priority over InputBox)
+	if action, found := m.pager.ModeBindings.Search.KeyCodeBindings[key]; found {
+		m.executeAction(action)
+		return
+	}
+
+	// Fall back to InputBox handling
 	if m.inputBox.handleKey(key) {
 		m.searchHistoryIndex = len(m.pager.searchHistory.entries) // Reset history index when user types
 		m.userEditedText = m.inputBox.text
 		return
 	}
 
-	switch key {
-	case twin.KeyEnter:
-		m.pager.searchHistory.addEntry(m.inputBox.text)
-		m.pager.mode = PagerModeViewing{pager: m.pager}
-		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
-
-	case twin.KeyEscape:
-		m.abort()
-
-	case twin.KeyPgUp, twin.KeyPgDown:
-		m.pager.searchHistory.addEntry(m.inputBox.text)
-		m.pager.mode = PagerModeViewing{pager: m.pager}
-		m.pager.mode.onKey(key)
-		m.pager.setTargetLine(nil) // Viewing doesn't need all lines
-
-	case twin.KeyUp:
-		m.moveSearchHistoryIndex(-1)
-
-	case twin.KeyDown:
-		m.moveSearchHistoryIndex(1)
-
-	default:
-		log.Debugf("Unhandled search key event %v", key)
-	}
+	log.Debugf("Unhandled search key event %v", key)
 }
 
 func (m *PagerModeSearch) onRune(char rune) {
-	// Handle ctrl-c
-	if char == '\x03' {
-		m.abort()
+	// Lookup action from keybindings
+	if action, found := m.pager.ModeBindings.Search.RuneBindings[char]; found {
+		m.executeAction(action)
 		return
 	}
 
+	// Unbound rune - insert into search box
 	m.searchHistoryIndex = len(m.pager.searchHistory.entries) // Reset history index when user types
 	m.inputBox.handleRune(char)
 	m.userEditedText = m.inputBox.text

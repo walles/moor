@@ -1,6 +1,9 @@
 package internal
 
-import "github.com/walles/moor/v2/twin"
+import (
+	log "github.com/sirupsen/logrus"
+	"github.com/walles/moor/v2/twin"
+)
 
 type PagerModeMark struct {
 	pager *Pager
@@ -21,22 +24,41 @@ func (m PagerModeMark) drawFooter(_ string, _ string, _ string) {
 	p.screen.SetCell(pos, height-1, twin.NewStyledRune(' ', twin.StyleDefault.WithAttr(twin.AttrReverse)))
 }
 
+func (m PagerModeMark) executeAction(action Action) {
+	p := m.pager
+
+	switch action {
+	case Cancel:
+		p.mode = PagerModeViewing{pager: p}
+		return
+	}
+
+	// Try common actions (including NoAction)
+	if p.executeCommonAction(action) {
+		return
+	}
+
+	// Action not handled
+	log.Debugf("Unhandled mark action: %v", action)
+}
+
 func (m PagerModeMark) onKey(key twin.KeyCode) {
 	p := m.pager
 
-	switch key {
-	case twin.KeyEnter, twin.KeyEscape:
-		// Never mind I
-		p.mode = PagerModeViewing{pager: p}
-
-	default:
-		// Never mind II
-		p.mode = PagerModeViewing{pager: p}
-		p.mode.onKey(key)
+	action, found := p.ModeBindings.Mark.KeyCodeBindings[key]
+	if found {
+		m.executeAction(action)
+		return
 	}
+
+	// No action bound, fall through to viewing mode
+	log.Tracef("Unhandled mark key event %v, treating as a viewing key event", key)
+	p.mode = PagerModeViewing{pager: p}
+	p.mode.onKey(key)
 }
 
 func (m PagerModeMark) onRune(char rune) {
+	log.Debugf("Setting mark '%s' at %v", string(char), m.pager.scrollPosition)
 	m.pager.bookmarks[char] = m.pager.scrollPosition
 	m.pager.mode = PagerModeViewing(m)
 }

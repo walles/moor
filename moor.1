@@ -49,6 +49,12 @@ Print debug logs after exiting, less verbose than
 Scrolls automatically to follow piped input, just like
 .B tail \-f
 .TP
+\fB\-\-keybindings\fR=file
+Path to a custom keybindings file.
+Run
+.B moor --print-default-keybindings
+to see the default keybindings and use them as a starting point.
+.TP
 \fB\-\-lang\fR=string
 Used for highlighting.
 Without this flag highlighting is based on the input file name.
@@ -79,6 +85,9 @@ Do not highlight the background of lines with search hits. The search hits thems
 \fB\-\-no\-statusbar\fR
 Hide the status bar, toggle with
 .B =
+.TP
+\fB\-\-print\-default\-keybindings\fR
+Print default keybindings to stdout and exit.
 .TP
 \fB\-\-quit\-if\-one\-screen\fR
 Print input contents without paging if the input fits on one screen.

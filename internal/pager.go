@@ -135,6 +135,9 @@ type Pager struct {
 	//
 	// Ref: https://github.com/walles/moor/issues/175
 	bookmarks map[rune]scrollPosition
+
+	// Key bindings for all modes
+	ModeBindings ModeBindings
 }
 
 type _PreHelpState struct {
@@ -197,6 +200,11 @@ Searching
 * Search is case sensitive if it contains any UPPER CASE CHARACTERS
 * Search is interpreted as a regexp if it is a valid one
 
+Customizing Key Bindings
+------------------------
+Key bindings can be customized — run 'moor --print-default-keybindings'
+to see the defaults, then redirect to ~/.config/moor/keybindings and edit.
+
 Reporting bugs
 --------------
 File issues at https://github.com/walles/moor/issues, or post
@@ -250,6 +258,9 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 
 	searchHistory := BootSearchHistory("")
 	pager.searchHistory = &searchHistory
+
+	// Initialize with default keybindings
+	pager.ModeBindings = DefaultModeBindings()
 
 	return &pager
 }
@@ -377,6 +388,115 @@ func (p *Pager) Quit() {
 	p.leftColumnZeroBased = p.preHelpState.leftColumnZeroBased
 	p.setTargetLine(p.preHelpState.targetLine)
 	p.preHelpState = nil
+}
+
+// commonActionHandlers is the single source of truth for which actions are
+// "common" (available in every mode). The map keys define the set; the values
+// execute the action.
+var commonActionHandlers = map[Action]func(*Pager){
+	Quit: func(p *Pager) {
+		p.Quit()
+	},
+	Reload: func(p *Pager) {
+		p.ReloadCurrentReader()
+	},
+	Edit: func(p *Pager) {
+		handleEditingRequest(p)
+	},
+	Help: func(p *Pager) {
+		if p.isShowingHelp {
+			return
+		}
+		p.preHelpState = &_PreHelpState{
+			scrollPosition:      p.scrollPosition,
+			leftColumnZeroBased: p.leftColumnZeroBased,
+			targetLine:          p.TargetLine,
+		}
+		p.scrollPosition = newScrollPosition("Pager scroll position")
+		p.leftColumnZeroBased = 0
+		p.setTargetLine(nil)
+		p.isShowingHelp = true
+	},
+	ToggleStatusBar: func(p *Pager) {
+		p.ShowStatusBar = !p.ShowStatusBar
+	},
+	ScrollUp: func(p *Pager) {
+		// Clipping is done in _Redraw()
+		p.scrollPosition = p.scrollPosition.PreviousLine(1)
+		p.handleScrolledUp()
+	},
+	ScrollDown: func(p *Pager) {
+		// Clipping is done in _Redraw()
+		p.scrollPosition = p.scrollPosition.NextLine(1)
+		p.handleScrolledDown()
+	},
+	ScrollTop: func(p *Pager) {
+		p.scrollPosition = newScrollPosition("Pager scroll position")
+		p.handleScrolledUp()
+	},
+	ScrollBottom: func(p *Pager) {
+		p.scrollToEnd()
+	},
+	ScrollPageDown: func(p *Pager) {
+		p.scrollPosition = p.scrollPosition.NextLine(p.visibleHeight())
+		p.handleScrolledDown()
+	},
+	ScrollPageUp: func(p *Pager) {
+		p.scrollPosition = p.scrollPosition.PreviousLine(p.visibleHeight())
+		p.handleScrolledUp()
+	},
+	ScrollHalfPageDown: func(p *Pager) {
+		p.scrollPosition = p.scrollPosition.NextLine(p.visibleHeight() / 2)
+		p.handleScrolledDown()
+	},
+	ScrollHalfPageUp: func(p *Pager) {
+		p.scrollPosition = p.scrollPosition.PreviousLine(p.visibleHeight() / 2)
+		p.handleScrolledUp()
+	},
+	ScrollRight: func(p *Pager) {
+		p.moveRight(p.SideScrollAmount)
+	},
+	ScrollLeft: func(p *Pager) {
+		p.moveRight(-p.SideScrollAmount)
+	},
+	ScrollRight1: func(p *Pager) {
+		p.moveRight(1)
+	},
+	ScrollLeft1: func(p *Pager) {
+		p.moveRight(-1)
+	},
+	ScrollHome: func(p *Pager) {
+		p.leftColumnZeroBased = 0
+		if !p.showLineNumbers {
+			// Line numbers not visible, turn them on if the user wants them.
+			p.showLineNumbers = p.ShowLineNumbers
+		}
+	},
+	ToggleWrap: func(p *Pager) {
+		p.WrapLongLines = !p.WrapLongLines
+		if p.WrapLongLines {
+			p.mode = &PagerModeInfo{Pager: p, Text: "Word wrapping enabled"}
+		} else {
+			p.mode = &PagerModeInfo{Pager: p, Text: "Word wrapping disabled"}
+		}
+	},
+	CycleTabSize: func(p *Pager) {
+		p.cycleTabSize()
+	},
+}
+
+// executeCommonAction handles actions that are common across all modes.
+// Returns true if the action was handled, false otherwise.
+func (p *Pager) executeCommonAction(action Action) bool {
+	if action == NoAction {
+		return true
+	}
+	handler, ok := commonActionHandlers[action]
+	if !ok {
+		return false
+	}
+	handler(p)
+	return true
 }
 
 // Negative deltas move left instead

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -366,6 +367,59 @@ func noLineNumbersDefault() bool {
 	return false
 }
 
+// appendActionHints writes "Valid actions for [section]: ..." lines to w for
+// every section that appears in an "unknown action" warning. The output is
+// sorted by section name for determinism.
+func appendActionHints(w io.Writer, warnings []internal.ParseWarning) {
+	sectionSet := make(map[string]struct{})
+	for _, warning := range warnings {
+		if strings.HasPrefix(warning.Message, "unknown action") && warning.Section != "" {
+			sectionSet[warning.Section] = struct{}{}
+		}
+	}
+	if len(sectionSet) == 0 {
+		return
+	}
+	sections := make([]string, 0, len(sectionSet))
+	for section := range sectionSet {
+		sections = append(sections, section)
+	}
+	sort.Strings(sections)
+	for _, section := range sections {
+		validActions := internal.GetValidActionNames(section)
+		if len(validActions) > 0 {
+			_, _ = fmt.Fprintf(w, "Valid actions for [%s]: %s\n",
+				section, strings.Join(validActions, ", "))
+		}
+	}
+}
+
+// formatKeybindingsError creates a detailed error message for keybinding issues
+func formatKeybindingsError(filename string, warnings []internal.ParseWarning) error {
+	var errMsg strings.Builder
+	fmt.Fprintf(&errMsg, "invalid keybindings in %s:\n", filename)
+
+	for _, w := range warnings {
+		fmt.Fprintf(&errMsg, "  %s\n", w.Error())
+	}
+
+	fmt.Fprintf(&errMsg, "\n")
+	appendActionHints(&errMsg, warnings)
+	fmt.Fprintf(&errMsg, "\nRun 'moor --print-default-keybindings' to see all available options.\n")
+	return fmt.Errorf("%s", errMsg.String())
+}
+
+// printKeybindingsWarnings prints warnings to stderr for default keybindings path
+func printKeybindingsWarnings(filename string, warnings []internal.ParseWarning) {
+	fmt.Fprintf(os.Stderr, "WARNING: Issues in keybindings file %s:\n", filename)
+	for _, warning := range warnings {
+		fmt.Fprintf(os.Stderr, "  %s\n", warning)
+	}
+	fmt.Fprintf(os.Stderr, "\nContinuing with partial keybindings merged with defaults.\n")
+	appendActionHints(os.Stderr, warnings)
+	fmt.Fprintf(os.Stderr, "Run 'moor --print-default-keybindings' to see all available options.\n\n")
+}
+
 // unescapeManPn removes escaping inserted by GNU man's escape_less function.
 // It escapes ? : . % \ with a backslash.
 func unescapeManPn(manPn string) string {
@@ -407,11 +461,14 @@ func pagerFromArgs(
 	flagSet.SetOutput(io.Discard) // We want to do our own printing
 
 	printVersion := flagSet.Bool("version", false, "Prints the moor version number")
+	printDefaultKeybindings := flagSet.Bool("print-default-keybindings", false, "Print default keybindings to stdout")
+
 	debug := flagSet.Bool("debug", false, "Print debug logs after exiting")
 	trace := flagSet.Bool("trace", false, "Print trace logs after exiting")
 
 	wrap := flagSet.Bool("wrap", false, "Wrap long lines")
 	follow := flagSet.Bool("follow", false, "Follow piped input just like \"tail -f\"")
+	keybindingsPath := flagSet.String("keybindings", "", "Path to custom keybindings `file`")
 	styleOption := flagSetFunc(flagSet,
 		"style", nil,
 		"Highlighting `style` from https://xyproto.github.io/splash/docs/longer/all.html", parseStyleOption)
@@ -502,6 +559,11 @@ func pagerFromArgs(
 		return nil, nil, chroma.Style{}, nil, logsRequested, nil
 	}
 
+	if *printDefaultKeybindings {
+		fmt.Print(internal.DefaultKeybindingsText())
+		return nil, nil, chroma.Style{}, nil, logsRequested, nil
+	}
+
 	log.SetLevel(log.InfoLevel)
 	if *trace {
 		log.SetLevel(log.TraceLevel)
@@ -534,6 +596,53 @@ func pagerFromArgs(
 		if err != nil {
 			return nil, nil, chroma.Style{}, nil, logsRequested, err
 		}
+	}
+
+	// Load and validate custom keybindings BEFORE screen init, so errors are
+	// properly displayed to the user rather than being swallowed by the screen.
+	keybindingsFile := *keybindingsPath
+	explicitKeybindingsPath := keybindingsFile != ""
+	if keybindingsFile == "" {
+		keybindingsFile = internal.DefaultKeybindingsPath()
+	}
+
+	var customBindings *internal.ModeBindings
+	if keybindingsFile != "" {
+		_, err := os.Stat(keybindingsFile)
+		if err == nil {
+			// File exists, try to load it
+			bindings, warnings, parseErr := internal.ParseKeybindingsFile(keybindingsFile)
+			if parseErr != nil {
+				if explicitKeybindingsPath {
+					// User explicitly specified the file, treat as error
+					return nil, nil, chroma.Style{}, nil, false, fmt.Errorf("failed to load keybindings from %s: %w", keybindingsFile, parseErr)
+				}
+				log.Warnf("Failed to load keybindings from %s: %v", keybindingsFile, parseErr)
+			} else if len(warnings) > 0 {
+				// Format warnings nicely
+				if explicitKeybindingsPath {
+					// User explicitly specified the file, treat warnings as errors
+					return nil, nil, chroma.Style{}, nil, false, formatKeybindingsError(keybindingsFile, warnings)
+				}
+				// Default path: print warnings but continue
+				printKeybindingsWarnings(keybindingsFile, warnings)
+				customBindings = &bindings
+				log.Infof("Loaded keybindings from %s with %d warnings", keybindingsFile, len(warnings))
+			} else {
+				customBindings = &bindings
+				log.Debugf("Loaded keybindings from %s", keybindingsFile)
+			}
+		} else if !os.IsNotExist(err) {
+			// File check failed for some reason other than not existing
+			if explicitKeybindingsPath {
+				return nil, nil, chroma.Style{}, nil, false, fmt.Errorf("failed to check keybindings file %s: %w", keybindingsFile, err)
+			}
+			log.Warnf("Failed to check keybindings file %s: %v", keybindingsFile, err)
+		} else if explicitKeybindingsPath {
+			// User specified a file that doesn't exist
+			return nil, nil, chroma.Style{}, nil, false, fmt.Errorf("keybindings file not found: %s", keybindingsFile)
+		}
+		// If file doesn't exist and it's the default path, that's fine - we'll use defaults (already set in NewPager)
 	}
 
 	if len(flagSetArgs) == 0 && !stdinIsRedirected {
@@ -658,6 +767,11 @@ func pagerFromArgs(
 	if *follow && pager.TargetLine == nil {
 		reallyHigh := linemetadata.IndexMax()
 		pager.TargetLine = &reallyHigh
+	}
+
+	// Apply custom keybindings if they were loaded earlier
+	if customBindings != nil {
+		pager.ModeBindings = *customBindings
 	}
 
 	return pager, screen, style, &formatter, logsRequested, nil

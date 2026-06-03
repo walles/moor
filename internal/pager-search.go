@@ -1,8 +1,6 @@
 package internal
 
 import (
-	"fmt"
-
 	"github.com/rivo/uniseg"
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
@@ -59,7 +57,9 @@ func (p *Pager) scrollToSearchHits() {
 }
 
 // Scroll to the next search hit, when the user presses 'n'.
-func (p *Pager) scrollToNextSearchHit() {
+// wrapAround restarts the search from the top when true, or continues from the
+// current position when false.
+func (p *Pager) scrollToNextSearchHit(wrapAround bool) {
 	if p.search.Inactive() {
 		// Nothing to search for, never mind
 		return
@@ -75,25 +75,21 @@ func (p *Pager) scrollToNextSearchHit() {
 		return
 	}
 
-	if p.isViewing() && p.isScrolledToEnd() {
+	if !wrapAround && p.isScrolledToEnd() {
 		p.mode = PagerModeNotFound{pager: p}
 		return
 	}
 
 	var firstSearchIndex linemetadata.Index
-
-	switch {
-	case p.isViewing():
-		// Start searching on the first line below the bottom of the screen
-		firstSearchIndex = *p.getLastVisibleLineIndex()
-
-	case p.isNotFound():
-		// Restart searching from the top
+	if wrapAround {
+		// Restart searching from the top; establishing viewing mode here ensures
+		// the mode is correct whether we arrive via executeAction (which already
+		// switched) or via a direct call (e.g. from tests).
 		p.mode = PagerModeViewing{pager: p}
 		firstSearchIndex = linemetadata.Index{}
-
-	default:
-		panic(fmt.Sprint("Unknown search mode when finding next: ", p.mode))
+	} else {
+		// Start searching on the first line below the bottom of the screen
+		firstSearchIndex = *p.getLastVisibleLineIndex()
 	}
 
 	firstHitIndex := FindFirstHit(p.Reader(), p.search, firstSearchIndex, nil, SearchDirectionForward)
@@ -174,7 +170,9 @@ func (p *Pager) scrollToSearchHitsBackwards() {
 }
 
 // Scroll backwards to the previous search hit, when the user presses 'N'.
-func (p *Pager) scrollToPreviousSearchHit() {
+// wrapAround restarts the search from the bottom when true, or continues from
+// the current position when false.
+func (p *Pager) scrollToPreviousSearchHit(wrapAround bool) {
 	if p.search.Inactive() {
 		// Nothing to search for, never mind
 		return
@@ -191,9 +189,11 @@ func (p *Pager) scrollToPreviousSearchHit() {
 	}
 
 	var firstSearchIndex linemetadata.Index
-
-	switch {
-	case p.isViewing():
+	if wrapAround {
+		// Restart searching from the bottom; same reasoning as scrollToNextSearchHit.
+		p.mode = PagerModeViewing{pager: p}
+		firstSearchIndex = *linemetadata.IndexFromLength(p.Reader().GetLineCount())
+	} else {
 		if p.scrollPosition.lineIndex(p).Index() == 0 {
 			// Already at the top, can't go further up
 			p.mode = PagerModeNotFound{pager: p}
@@ -203,14 +203,6 @@ func (p *Pager) scrollToPreviousSearchHit() {
 		// Start searching on the first line above the top of the screen
 		position := p.scrollPosition.PreviousLine(1)
 		firstSearchIndex = *position.lineIndex(p)
-
-	case p.isNotFound():
-		// Restart searching from the bottom
-		p.mode = PagerModeViewing{pager: p}
-		firstSearchIndex = *linemetadata.IndexFromLength(p.Reader().GetLineCount())
-
-	default:
-		panic(fmt.Sprint("Unknown search mode when finding previous: ", p.mode))
 	}
 
 	hitIndex := FindFirstHit(p.Reader(), p.search, firstSearchIndex, nil, SearchDirectionBackward)
@@ -529,9 +521,4 @@ func (p *Pager) scrollLeftToSearchHits() bool {
 func (p *Pager) isViewing() bool {
 	_, isViewing := p.mode.(PagerModeViewing)
 	return isViewing
-}
-
-func (p *Pager) isNotFound() bool {
-	_, isNotFound := p.mode.(PagerModeNotFound)
-	return isNotFound
 }
