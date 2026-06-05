@@ -141,7 +141,7 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 // fileShouldBeReloaded checks if the file's current starting bytes still match the
 // headerBytes we recorded originally. Returns true if they differ (file was
 // rewritten) or if we are unsure due to errors.
-func fileShouldBeReloaded(fileName string, headerBytes []byte, isCompressed bool) bool {
+func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
 	if len(headerBytes) == 0 {
 		// We have no baseline to compare against (e.g., initially empty file).
 		//
@@ -165,21 +165,15 @@ func fileShouldBeReloaded(fileName string, headerBytes []byte, isCompressed bool
 		}
 	}()
 
-	if !isCompressed {
-		// for compressed files, headerBytes contain uncompressed data
-		// so it can't be compared directly to data on disk
-		checkBuf := make([]byte, len(headerBytes))
-		if _, err := file.ReadAt(checkBuf, 0); err != nil {
-			// Stat() passed the old size check, but reading the boundary failed
-			// (e.g. io.EOF). This means the file was likely truncated *during* this
-			// polling cycle. Safest to reload.
-			return true
-		}
-
-		return !bytes.Equal(checkBuf, headerBytes)
+	checkBuf := make([]byte, len(headerBytes))
+	if _, err := file.ReadAt(checkBuf, 0); err != nil {
+		// Stat() passed the old size check, but reading the boundary failed
+		// (e.g. io.EOF). This means the file was likely truncated *during* this
+		// polling cycle. Safest to reload.
+		return true
 	}
 
-	return false
+	return !bytes.Equal(checkBuf, headerBytes)
 }
 
 func determineTailAction(
@@ -214,7 +208,7 @@ func determineTailAction(
 			return tailActionReload
 		}
 
-		if fileShouldBeReloaded(fileName, headerBytes, isCompressed) {
+		if fileShouldBeReloaded(fileName, headerBytes) {
 			log.Debugf("File %s boundary bytes changed (likely rewritten) while growing, reloading", fileName)
 			return tailActionReload
 		}
@@ -230,7 +224,7 @@ func determineTailAction(
 		return tailActionReload
 	}
 
-	if fileShouldBeReloaded(fileName, headerBytes, isCompressed) {
+	if fileShouldBeReloaded(fileName, headerBytes) {
 		log.Debugf("File %s changed, reloading", fileName)
 		return tailActionReload
 	}

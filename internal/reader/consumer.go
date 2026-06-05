@@ -225,7 +225,7 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 		}
 	}
 
-	if reader.FileName != nil {
+	if reader.FileName != nil && !reader.IsCompressed {
 		reader.Lock()
 		reader.bytesCount += inspectionReader.bytesCount
 		if len(reader.headerBytes) == 0 && len(inspectionReader.headerBytes) > 0 {

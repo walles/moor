@@ -61,6 +61,19 @@ func NewFromFilename(filename string, formatter chroma.Formatter, options Reader
 		returnMe.SetStyleForHighlighting(*options.Style)
 	}
 
+	if returnMe.IsCompressed {
+		file, err := os.Open(filename)
+		if err == nil {
+			buf := make([]byte, headerBytesCapacity)
+			if n, err := file.ReadAt(buf, 0); err == io.EOF {
+				returnMe.headerBytes = buf[:n]
+			} else if err == nil {
+				returnMe.headerBytes = buf
+			}
+			file.Close()
+		}
+	}
+
 	return returnMe, nil
 }
 
