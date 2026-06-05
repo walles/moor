@@ -70,7 +70,7 @@ func NewFromFilename(filename string, formatter chroma.Formatter, options Reader
 			} else if err == nil {
 				returnMe.headerBytes = buf
 			}
-			file.Close()
+			_ = file.Close()
 		}
 	}
 
