@@ -65,11 +65,13 @@ func NewFromFilename(filename string, formatter chroma.Formatter, options Reader
 		file, err := os.Open(filename)
 		if err == nil {
 			buf := make([]byte, headerBytesCapacity)
+			returnMe.RLock()
 			if n, err := file.ReadAt(buf, 0); err == io.EOF {
 				returnMe.headerBytes = buf[:n]
 			} else if err == nil {
 				returnMe.headerBytes = buf
 			}
+			returnMe.Unlock()
 			_ = file.Close()
 		}
 	}
