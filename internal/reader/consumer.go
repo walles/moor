@@ -225,14 +225,14 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 		}
 	}
 
+	reader.Lock()
 	if reader.FileName != nil && !reader.IsCompressed {
-		reader.Lock()
 		reader.bytesCount += inspectionReader.bytesCount
 		if len(reader.headerBytes) == 0 && len(inspectionReader.headerBytes) > 0 {
 			reader.headerBytes = append([]byte(nil), inspectionReader.headerBytes...)
 		}
-		reader.Unlock()
 	}
+	reader.Unlock()
 
 	if awaitingFirstByte {
 		// If the stream was empty we never got any first byte. Make sure people
