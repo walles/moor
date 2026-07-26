@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+          only-new-issues: true
+
+      - name: Install mandoc
+        run: sudo apt-get install -y mandoc
+
+      - name: Lint man page
+        run: mandoc -T lint -W warning moor.1
+
+  validate:
+    name: Validate
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+
+      - name: Install mandoc
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get install -y mandoc
+
+      - name: Install mandoc
+        if: matrix.os == 'macos-latest'
+        run: brew install mandoc
+
+      - name: Run tests (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        env:
+          SKIP_LINT: 1
+        run: ./test.sh
+
+      - name: Run tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          go build -race ./...
+          go test -race -timeout 60s ./...
+
+      - name: Run Benchmarks
+        shell: bash
+        run: |
+          # We always run benchmarks on all platforms to catch runtime issues.
+          # However, we only capture output for analysis on ubuntu-latest to:
+          # 1. Ensure a consistent baseline (comparing across OSes is unreliable).
+          # 2. Prevent PR comment spam (avoiding 3 separate bot comments).
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ] && [ "${{ github.event_name }}" == "pull_request" ]; then
+            ./benchmark.sh output.txt
+          else
+            ./benchmark.sh
+          fi
+
+      - name: Store benchmark result
+        # Only analyze and comment on Ubuntu runs to maintain a stable performance baseline
+        # and avoid multiple redundant comments in Pull Requests.
+        if: matrix.os == 'ubuntu-latest' && github.event_name == 'pull_request'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Go Benchmark
+          tool: 'go'
+          output-file-path: output.txt
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          comment-always: true
+          alert-threshold: '120%'
+          fail-on-alert: true

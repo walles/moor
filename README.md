@@ -265,11 +265,13 @@ Launch the manual test suite:
 To run tests in 32 bit mode, either do `GOARCH=386 ./test.sh` if you're on
 Linux, or `docker build . -f Dockerfile-test-386` (tested on macOS).
 
-Run microbenchmarks:
+Run microbenchmarks (results are saved to `benchmarks/<os>-<arch>-<cpu>`):
 
 ```bash
-go test -benchmem -run='^$' -bench=. ./...
+./benchmark.sh
 ```
+
+*(You can also run them using `./test.sh --bench`)*
 
 Profiling `BenchmarkPlainTextSearch()`. Try replacing `-alloc_objects` with
 `-alloc_space` or change the `-focus` function:

@@ -2,6 +2,11 @@
 
 set -e -o pipefail
 
+if [[ "$1" == "--bench" || "$1" == "--benchmark" ]]; then
+  ./benchmark.sh
+  exit 0
+fi
+
 # Test that we only pass twin colors to these methods, not numbers
 grep -En 'Foreground\([1-9]' ./**/*.go && exit 1
 grep -En 'Background\([1-9]' ./**/*.go && exit 1
@@ -10,12 +15,16 @@ grep -En 'Background\([1-9]' ./**/*.go && exit 1
 echo Building sources...
 ./build.sh
 
-# Linting
-echo 'Linting, repro any errors locally using "golangci-lint run"...'
-echo '  Linting without tests...'
-golangci-lint run --tests=false
-echo '  Linting with tests...'
-golangci-lint run --tests=true
+if [[ -z "${SKIP_LINT}" ]]; then
+  # Linting
+  echo 'Linting, repro any errors locally using "golangci-lint run"...'
+  echo '  Linting without tests...'
+  golangci-lint run --tests=false
+  echo '  Linting with tests...'
+  golangci-lint run --tests=true
+else
+  echo "Skipping golangci-lint (SKIP_LINT is set)..."
+fi
 
 # Unit tests
 echo "Running unit tests..."
