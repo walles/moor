@@ -164,7 +164,8 @@ func textAsString(reader *ReaderImpl, shouldFormat bool) string {
 }
 
 func isJsonOrJsonl(text string) bool {
-	if json.Valid([]byte(text)) {
+	trimmed := strings.TrimSpace(text)
+	if len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[') && json.Valid([]byte(trimmed)) {
 		return true
 	}
 

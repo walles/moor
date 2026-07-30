@@ -61,6 +61,7 @@ func TestFormatJsonArray(t *testing.T) {
 func TestIsJsonOrJsonl(t *testing.T) {
 	// Standard JSON
 	assert.Assert(t, isJsonOrJsonl(`{"hello": "world"}`))
+	assert.Assert(t, isJsonOrJsonl(`[1, 2, 3]`))
 
 	// JSONL sample file
 	jsonlPath := filepath.Join("..", "..", "sample-files", "jsonl.jsonl")
@@ -68,4 +69,19 @@ func TestIsJsonOrJsonl(t *testing.T) {
 	assert.NilError(t, err)
 
 	assert.Assert(t, isJsonOrJsonl(string(jsonlBytes)))
+}
+
+func TestJsonScalarIsNotHighlightedAsJson(t *testing.T) {
+	for _, scalar := range []string{
+		"1\n",
+		" 1 \n",
+		"1.1\n",
+		"true\n",
+		"null\n",
+		`"text"`,
+	} {
+		t.Run(scalar, func(t *testing.T) {
+			assert.Assert(t, !isJsonOrJsonl(scalar))
+		})
+	}
 }
