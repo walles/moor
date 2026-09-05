@@ -199,7 +199,7 @@ func getColorFormatter() chroma.Formatter {
 }
 
 func pageFromReader(reader *internalReader.ReaderImpl, options Options) error {
-	screen, e := twin.NewScreen()
+	screen, e := twin.NewScreen(twin.Options{})
 	if e != nil {
 		// Screen setup failed
 		return e

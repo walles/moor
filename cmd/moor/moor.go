@@ -357,7 +357,7 @@ func getVersion() string {
 // Can return a nil pager on --help or --version, or if pumping to stdout.
 func pagerFromArgs(
 	args []string,
-	newScreen func(mouseMode twin.MouseMode, terminalColorCount twin.ColorCount) (twin.Screen, error),
+	newScreen func(options twin.Options) (twin.Screen, error),
 	stdinIsRedirected bool,
 	stdoutIsRedirected bool,
 ) (
@@ -579,7 +579,11 @@ func pagerFromArgs(
 
 	// We got the first byte, this means sudo is done (if it was used) and we
 	// can set up the UI.
-	screen, err := newScreen(*mouseMode, *terminalColorsCount)
+	screen, err := newScreen(twin.Options{
+		MouseMode:          *mouseMode,
+		TerminalColorCount: *terminalColorsCount,
+		Logger:             &util.TwinLogger{},
+	})
 	if err != nil {
 		// Ref: https://github.com/walles/moor/issues/149
 		log.Info("Failed to set up screen for paging, pumping to stdout instead: ", err)
@@ -638,7 +642,6 @@ func main() {
 	var loglines internal.LogWriter
 	logsRequested := false
 	log.SetOutput(&loglines)
-	twin.SetLogger(&util.TwinLogger{})
 	russiaNotSupported()
 
 	defer func() {
@@ -673,7 +676,7 @@ func main() {
 
 	pager, screen, style, formatter, _logsRequested, err := pagerFromArgs(
 		os.Args,
-		twin.NewScreenWithMouseModeAndColorCount,
+		twin.NewScreen,
 		stdinIsRedirected,
 		stdoutIsRedirected,
 	)
