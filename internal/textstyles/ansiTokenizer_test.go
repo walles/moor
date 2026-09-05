@@ -12,9 +12,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 const samplesDir = "../../sample-files"
@@ -71,7 +73,7 @@ func TestTokenize(t *testing.T) {
 				if lineIndex == nil {
 					lineIndex = &linemetadata.Index{}
 				} else {
-					lineIndex = new(lineIndex.NonWrappingAdd(1))
+					lineIndex = ptr.To(lineIndex.NonWrappingAdd(1))
 				}
 
 				var loglines strings.Builder

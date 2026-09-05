@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"gotest.tools/v3/assert"
+
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 // Paging input that doesn't fit on one screen happens on the alternate screen,
@@ -19,7 +21,7 @@ func TestLongInputUsesAlternateScreen(t *testing.T) {
 		t.Run(fmt.Sprintf("fromPipe=%t", fromPipe), func(t *testing.T) {
 			options := moorOptions{answerBackgroundQuery: true}
 			if fromPipe {
-				options.stdin = new(textLines(100))
+				options.stdin = ptr.To(textLines(100))
 			} else {
 				options.args = []string{createTextFile(t, 100)}
 			}
@@ -118,7 +120,7 @@ func TestQuitIfOneScreenNeverEntersAlternateScreen(t *testing.T) {
 					args:                  []string{"--quit-if-one-screen"},
 				}
 				if fromPipe {
-					options.stdin = new("hello world 1\nhello world 2\n")
+					options.stdin = ptr.To("hello world 1\nhello world 2\n")
 				} else {
 					options.args = append(options.args, createTextFile(t, 2))
 				}
@@ -168,7 +170,7 @@ func TestQuitIfOneScreenNeverEntersAlternateScreenWhenHighlighted(t *testing.T) 
 					args:                  []string{"--quit-if-one-screen"},
 				}
 				if fromPipe {
-					options.stdin = new(jsonLines(lineCount, marker))
+					options.stdin = ptr.To(jsonLines(lineCount, marker))
 				} else {
 					options.args = append(options.args, createSourceFile(t, lineCount, marker))
 				}

@@ -10,8 +10,10 @@ import (
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/go-enry/go-enry/v2"
 	log "github.com/sirupsen/logrus"
-	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/twin"
+
+	"github.com/walles/moor/v2/internal/ptr"
+	"github.com/walles/moor/v2/internal/textstyles"
 )
 
 // Read and highlight some text using Chroma:
@@ -67,7 +69,7 @@ func Highlight(text string, style chroma.Style, formatter chroma.Formatter, lexe
 	// there is one line too many.
 	sgrReset := "\x1b[0m"
 
-	return new(strings.TrimSuffix(highlighted, sgrReset)), nil
+	return ptr.To(strings.TrimSuffix(highlighted, sgrReset)), nil
 }
 
 // Reports whether every visible character of some highlighted text looks the

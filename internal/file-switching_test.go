@@ -4,10 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/walles/moor/v2/internal/linemetadata"
-	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
+	"github.com/walles/moor/v2/internal/reader"
 )
 
 func TestIssue426SwitchingToSmallerFileClearsStaleScrollPosition(t *testing.T) {
@@ -27,7 +29,7 @@ func TestIssue426SwitchingToSmallerFileClearsStaleScrollPosition(t *testing.T) {
 	// moved to a shorter file, but the scroll position still points below it.
 	pager.scrollPosition = scrollPosition{
 		internalDontTouch: scrollPositionInternal{
-			lineIndex: new(linemetadata.IndexFromZeroBased(70)),
+			lineIndex: ptr.To(linemetadata.IndexFromZeroBased(70)),
 			delta:     0,
 			name:      "Issue 426 stale file switch",
 		},

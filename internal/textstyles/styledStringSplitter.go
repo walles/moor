@@ -6,8 +6,10 @@ import (
 	"unicode/utf8"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/twin"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 const esc = '\x1b'
@@ -477,7 +479,7 @@ func (s *styledStringSplitter) handleURL() error {
 
 			// End of URL
 			urlEndIndexExclusive := s.nextByteIndex - 2
-			s.startNewPart(s.inProgressStyle.WithHyperlink(new(s.input[urlStartIndex:urlEndIndexExclusive])))
+			s.startNewPart(s.inProgressStyle.WithHyperlink(ptr.To(s.input[urlStartIndex:urlEndIndexExclusive])))
 			return nil
 		}
 
@@ -491,7 +493,7 @@ func (s *styledStringSplitter) handleURL() error {
 		if char == '\x07' {
 			// End of URL
 			urlEndIndexExclusive := s.nextByteIndex - 1
-			s.startNewPart(s.inProgressStyle.WithHyperlink(new(s.input[urlStartIndex:urlEndIndexExclusive])))
+			s.startNewPart(s.inProgressStyle.WithHyperlink(ptr.To(s.input[urlStartIndex:urlEndIndexExclusive])))
 			return nil
 		}
 

@@ -9,11 +9,13 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	log "github.com/sirupsen/logrus"
+	"github.com/walles/twin"
+
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/search"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/twin"
 )
 
 type PagerMode interface {
@@ -263,7 +265,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		Filter:        &pager.filter,
 	}
 
-	pager.searchHistory = new(BootSearchHistory(""))
+	pager.searchHistory = ptr.To(BootSearchHistory(""))
 
 	return &pager
 }
@@ -470,7 +472,7 @@ func (p *Pager) handleScrolledUp() {
 func (p *Pager) handleScrolledDown() {
 	if p.isScrolledToEnd() {
 		// Follow output
-		p.setTargetLine(new(linemetadata.IndexMax()))
+		p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 	} else {
 		p.setTargetLine(nil)
 	}

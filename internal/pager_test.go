@@ -12,11 +12,13 @@ import (
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/google/go-cmp/cmp"
-	"github.com/walles/moor/v2/internal/linemetadata"
-	"github.com/walles/moor/v2/internal/reader"
-	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
+	"github.com/walles/moor/v2/internal/reader"
+	"github.com/walles/moor/v2/internal/textstyles"
 )
 
 // NOTE: You can find related tests in screenLines_test.go.
@@ -772,7 +774,7 @@ func TestHandleMoreLinesAvailableWithEmptyFile(t *testing.T) {
 	pager := NewPager(emptyReader)
 
 	// Simulate --follow mode by setting target to max
-	pager.TargetLine = new(linemetadata.IndexMax())
+	pager.TargetLine = ptr.To(linemetadata.IndexMax())
 
 	// This should not crash when lineCount is 0
 	pager.handleMoreLinesAvailable()

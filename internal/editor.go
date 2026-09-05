@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 )
 
@@ -118,7 +120,7 @@ func middleVisibleLine(p *Pager) *linemetadata.Index {
 		return nil
 	}
 
-	return new(lines[len(lines)/2].inputLineIndex)
+	return ptr.To(lines[len(lines)/2].inputLineIndex)
 }
 
 // check if the editor can accept "+LINENUMBER" argument

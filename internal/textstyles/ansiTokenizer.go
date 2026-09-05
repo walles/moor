@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/twin"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 // How do we render unprintable characters?
@@ -824,7 +826,7 @@ func consumeCompositeColor(numbers []uint, index int) (int, *twin.Color, error) 
 
 		colorNumber := numbers[index]
 
-		return index + 1, new(twin.NewColor256(uint8(colorNumber))), nil
+		return index + 1, ptr.To(twin.NewColor256(uint8(colorNumber))), nil
 	}
 
 	if numbers[index] == 2 {
@@ -844,7 +846,7 @@ func consumeCompositeColor(numbers []uint, index int) (int, *twin.Color, error) 
 		gValue := uint8(numbers[gIndex])
 		bValue := uint8(numbers[bIndex])
 
-		return bIndex + 1, new(twin.NewColor24Bit(rValue, gValue, bValue)), nil
+		return bIndex + 1, ptr.To(twin.NewColor24Bit(rValue, gValue, bValue)), nil
 	}
 
 	err := fmt.Errorf(

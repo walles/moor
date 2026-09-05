@@ -21,12 +21,14 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
 
+	"github.com/walles/twin"
+
 	"github.com/walles/moor/v2/internal"
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/moor/v2/internal/util"
-	"github.com/walles/twin"
 )
 
 var versionString = ""
@@ -632,7 +634,7 @@ func pagerFromArgs(
 
 	pager.TargetLine = targetLine
 	if *follow && pager.TargetLine == nil {
-		pager.TargetLine = new(linemetadata.IndexMax())
+		pager.TargetLine = ptr.To(linemetadata.IndexMax())
 	}
 
 	return pager, screen, style, &formatter, logsRequested, nil
