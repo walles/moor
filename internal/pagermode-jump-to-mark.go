@@ -19,7 +19,7 @@ func (m PagerModeJumpToMark) drawFooter(_ string, _ string, _ string) {
 
 	pos := 0
 	for _, token := range m.getMarkPrompt() {
-		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(token, twin.StyleDefault))
+		pos += p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: token, Style: twin.StyleDefault})
 	}
 }
 

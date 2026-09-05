@@ -16,11 +16,11 @@ func (m *PagerModeColonCommand) drawFooter(_ string, _ string, _ string) {
 
 	pos := 0
 	for _, token := range "Go to [n]ext, [p]revious or first [x] file: " {
-		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(token, twin.StyleDefault))
+		pos += p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: token, Style: twin.StyleDefault})
 	}
 
 	// Add a cursor
-	p.screen.SetCell(pos, height-1, twin.NewStyledRune(' ', twin.StyleDefault.WithAttr(twin.AttrReverse)))
+	p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: ' ', Style: twin.StyleDefault.WithAttr(twin.AttrReverse)})
 }
 
 func (m *PagerModeColonCommand) onKey(key twin.KeyCode) {

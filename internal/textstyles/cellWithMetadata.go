@@ -40,7 +40,7 @@ func (r CellWithMetadata) Equal(b CellWithMetadata) bool {
 }
 
 func (r CellWithMetadata) ToStyledRune() twin.StyledRune {
-	return twin.NewStyledRune(r.Rune, r.Style)
+	return twin.StyledRune{Rune: r.Rune, Style: r.Style}
 }
 
 func (r *CellWithMetadata) Width() int {
