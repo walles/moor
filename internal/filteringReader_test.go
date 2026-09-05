@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/walles/twin"
+	"gotest.tools/v3/assert"
+
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/search"
-	"github.com/walles/moor/v2/twin"
-	"gotest.tools/v3/assert"
 )
 
 func TestOneLine(t *testing.T) {
@@ -61,7 +63,7 @@ func BenchmarkFilterHugeFile(b *testing.B) {
 
 	fr := FilteringReader{
 		BackingReader: input,
-		Filter:        new(search.For("Periodic")),
+		Filter:        ptr.To(search.For("Periodic")),
 	}
 	fr.rebuildCache() // warmup
 

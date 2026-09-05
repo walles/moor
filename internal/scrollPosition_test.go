@@ -5,10 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/walles/moor/v2/internal/linemetadata"
-	"github.com/walles/moor/v2/internal/reader"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
+	"github.com/walles/moor/v2/internal/reader"
 )
 
 const screenHeight = 60
@@ -177,7 +179,7 @@ func TestIssue399(t *testing.T) {
 	pager := NewPager(r)
 
 	spci := scrollPositionInternal{
-		lineIndex: new(linemetadata.IndexFromZeroBased(900)),
+		lineIndex: ptr.To(linemetadata.IndexFromZeroBased(900)),
 		delta:     569,
 		name:      "scrollToSearchHits",
 	}
@@ -220,7 +222,7 @@ func TestIssue415Panic(t *testing.T) {
 	pager := NewPager(r)
 	pager.filteringReader.BackingReader = &shrinkingReader{Reader: r}
 	spci := scrollPositionInternal{
-		lineIndex: new(linemetadata.IndexFromZeroBased(10)), // start out of bounds (past what the reader claims it has)
+		lineIndex: ptr.To(linemetadata.IndexFromZeroBased(10)), // start out of bounds (past what the reader claims it has)
 		delta:     0,
 		name:      "test415",
 	}

@@ -1,6 +1,12 @@
 module github.com/walles/moor/v2
 
-go 1.27.0
+// Go version policy: No newer than the most recently end-of-lifed Go release,
+// so distro packagers building from source aren't forced onto a toolchain their
+// repos don't have yet.
+//
+// Once this reaches 1.26, the whole internal/ptr package can be replaced with
+// Go's builtin new(expr) instead.
+go 1.25.0
 
 require (
 	github.com/adrg/xdg v0.5.3
@@ -14,8 +20,7 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/sirupsen/logrus v1.9.4
 	github.com/ulikunitz/xz v0.5.16
-	golang.org/x/sync v0.22.0
-	golang.org/x/sys v0.47.0
+	github.com/walles/twin v0.9.1
 	golang.org/x/term v0.45.0
 	gotest.tools/v3 v3.5.2
 )
@@ -23,4 +28,5 @@ require (
 require (
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/go-enry/go-oniguruma v1.2.1 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )

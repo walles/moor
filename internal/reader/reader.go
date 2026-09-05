@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/util"
 
 	"github.com/alecthomas/chroma/v2"
@@ -556,7 +557,7 @@ func (reader *ReaderImpl) PumpToStdout() {
 func (reader *ReaderImpl) setText(text string) {
 	lines := []*Line{}
 	for lineString := range strings.SplitSeq(text, "\n") {
-		lines = append(lines, new(Line{raw: []byte(lineString)}))
+		lines = append(lines, ptr.To(Line{raw: []byte(lineString)}))
 	}
 
 	if len(lines) > 0 && strings.HasSuffix(text, "\n") {

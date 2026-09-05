@@ -3,7 +3,7 @@ package textstyles
 import (
 	"unicode"
 
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 func manPageHeadingFromString(s string) *StyledRunesWithTrailer {

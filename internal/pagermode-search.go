@@ -2,7 +2,7 @@ package internal
 
 import (
 	log "github.com/sirupsen/logrus"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 type SearchDirection bool

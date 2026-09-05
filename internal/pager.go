@@ -9,11 +9,13 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	log "github.com/sirupsen/logrus"
+	"github.com/walles/twin"
+
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/search"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
 )
 
 type PagerMode interface {
@@ -263,7 +265,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		Filter:        &pager.filter,
 	}
 
-	pager.searchHistory = new(BootSearchHistory(""))
+	pager.searchHistory = ptr.To(BootSearchHistory(""))
 
 	return &pager
 }
@@ -334,7 +336,7 @@ func renderHelpText(help string) []twin.StyledRune {
 			continue
 		}
 
-		result = append(result, twin.NewStyledRune(token, style))
+		result = append(result, twin.StyledRune{Rune: token, Style: style})
 	}
 
 	return result
@@ -355,17 +357,17 @@ func (p *Pager) setFooter(prefix string, filename string, status string, help st
 
 	// Prefix (multiple open files)
 	for _, token := range prefix {
-		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(token, theme.statusbar))
+		pos += p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: token, Style: theme.statusbar})
 	}
 
 	// File name
 	for _, token := range filename {
-		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(token, theme.statusbarFile))
+		pos += p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: token, Style: theme.statusbarFile})
 	}
 
 	// percentage,
 	for _, token := range status + "  " {
-		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(token, theme.statusbar))
+		pos += p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: token, Style: theme.statusbar})
 	}
 
 	// Help text, highlight keyboard shortcuts
@@ -374,7 +376,7 @@ func (p *Pager) setFooter(prefix string, filename string, status string, help st
 	}
 
 	for pos < width {
-		pos += p.screen.SetCell(pos, height-1, twin.NewStyledRune(' ', theme.statusbar))
+		pos += p.screen.SetCell(pos, height-1, twin.StyledRune{Rune: ' ', Style: theme.statusbar})
 	}
 }
 
@@ -470,7 +472,7 @@ func (p *Pager) handleScrolledUp() {
 func (p *Pager) handleScrolledDown() {
 	if p.isScrolledToEnd() {
 		// Follow output
-		p.setTargetLine(new(linemetadata.IndexMax()))
+		p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 	} else {
 		p.setTargetLine(nil)
 	}
@@ -723,16 +725,16 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 		switch event := event.(type) {
 		case twin.EventKeyCode:
-			log.Tracef("Handling key event %d...", event.KeyCode())
-			p.mode.onKey(event.KeyCode())
+			log.Tracef("Handling key event %d...", event.KeyCode)
+			p.mode.onKey(event.KeyCode)
 
 		case twin.EventRune:
-			log.Tracef("Handling rune event '%c'/0x%04x...", event.Rune(), event.Rune())
-			p.mode.onRune(event.Rune())
+			log.Tracef("Handling rune event '%c'/0x%04x...", event.Rune, event.Rune)
+			p.mode.onRune(event.Rune)
 
 		case twin.EventMouse:
-			log.Tracef("Handling mouse event %d...", event.Buttons())
-			switch event.Buttons() {
+			log.Tracef("Handling mouse event %d...", event.Buttons)
+			switch event.Buttons {
 			case twin.MouseWheelUp:
 				// Clipping is done in _Redraw()
 				p.scrollPosition = p.scrollPosition.PreviousLine(1)
@@ -748,7 +750,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				p.moveRight(p.SideScrollAmount)
 
 			default:
-				log.Warnf("Unhandled mouse buttons: %d", event.Buttons())
+				log.Warnf("Unhandled mouse buttons: %d", event.Buttons)
 			}
 
 		case twin.EventResize:

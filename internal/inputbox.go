@@ -3,7 +3,7 @@ package internal
 import (
 	"unicode"
 
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 type InputBoxOnTextChanged func(text string)
@@ -39,7 +39,7 @@ func (b *InputBox) draw(screen twin.Screen, keys_help string, prompt string) {
 
 	// Draw the prompt first
 	for _, ch := range prompt {
-		pos += screen.SetCell(pos, height-1, twin.NewStyledRune(ch, twin.StyleDefault))
+		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: ch, Style: twin.StyleDefault})
 	}
 
 	// Work with runes for cursor correctness
@@ -56,28 +56,28 @@ func (b *InputBox) draw(screen twin.Screen, keys_help string, prompt string) {
 		if i == b.cursorPos {
 			break
 		}
-		pos += screen.SetCell(pos, height-1, twin.NewStyledRune(ch, twin.StyleDefault))
+		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: ch, Style: twin.StyleDefault})
 	}
 
 	// If cursor is on a rune, invert that rune. If cursor is at the end,
 	// show an inverted blank cell.
 	if b.cursorPos < len(textRunes) {
-		pos += screen.SetCell(pos, height-1, twin.NewStyledRune(textRunes[b.cursorPos], twin.StyleDefault.WithAttr(twin.AttrReverse)))
+		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: textRunes[b.cursorPos], Style: twin.StyleDefault.WithAttr(twin.AttrReverse)})
 
 		// Draw right side after the cursor rune
 		for i := b.cursorPos + 1; i < len(textRunes); i++ {
-			pos += screen.SetCell(pos, height-1, twin.NewStyledRune(textRunes[i], twin.StyleDefault))
+			pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: textRunes[i], Style: twin.StyleDefault})
 		}
 	} else {
 		// Cursor at end -> reverse blank
-		pos += screen.SetCell(pos, height-1, twin.NewStyledRune(' ', twin.StyleDefault.WithAttr(twin.AttrReverse)))
+		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: ' ', Style: twin.StyleDefault.WithAttr(twin.AttrReverse)})
 	}
 
 	afterTextPos := pos
 
 	// Clear the rest of the line
 	for pos < width {
-		pos += screen.SetCell(pos, height-1, twin.NewStyledRune(' ', twin.StyleDefault))
+		pos += screen.SetCell(pos, height-1, twin.StyledRune{Rune: ' ', Style: twin.StyleDefault})
 	}
 
 	// Draw help on the right
@@ -90,7 +90,7 @@ func (b *InputBox) draw(screen twin.Screen, keys_help string, prompt string) {
 			for _, cell := range renderedHelp {
 				pos += screen.SetCell(pos, height-1, cell)
 			}
-			screen.SetCell(pos, height-1, twin.NewStyledRune(' ', theme.statusbar))
+			screen.SetCell(pos, height-1, twin.StyledRune{Rune: ' ', Style: theme.statusbar})
 		}
 	}
 }

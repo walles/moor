@@ -1,6 +1,6 @@
 package internal
 
-import "github.com/walles/moor/v2/twin"
+import "github.com/walles/twin"
 
 type PagerModeNotFound struct {
 	pager *Pager

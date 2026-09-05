@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
 )
 
@@ -31,7 +31,7 @@ func TestUnescapeManPn(t *testing.T) {
 func TestPageOneInputFile(t *testing.T) {
 	pager, screen, _, formatter, _, err := pagerFromArgs(
 		[]string{"", "moor_test.go"},
-		func(_ twin.MouseMode, _ twin.ColorCount) (twin.Screen, error) {
+		func(_ twin.Options) (twin.Screen, error) {
 			return twin.NewFakeScreen(80, 24), nil
 		},
 		false, // stdin is redirected

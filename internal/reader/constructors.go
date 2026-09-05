@@ -12,6 +12,8 @@ import (
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
+
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 // NewFromFilename creates a new file reader.
@@ -48,7 +50,7 @@ func NewFromFilename(filename string, formatter chroma.Formatter, options Reader
 	returnMe.lastStat = initialStat
 
 	// Ensure the display name matches the highlighting name (e.g. without .gz)
-	returnMe.DisplayName = new(filepath.Base(highlightingFilename))
+	returnMe.DisplayName = ptr.To(filepath.Base(highlightingFilename))
 
 	returnMe.IsCompressed = (filename != highlightingFilename)
 
@@ -127,7 +129,7 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 	}
 	var displayFileName *string
 	if originalFileName != nil {
-		displayFileName = new(filepath.Base(*originalFileName))
+		displayFileName = ptr.To(filepath.Base(*originalFileName))
 	}
 	streamCloser, _ := reader.(io.Closer)
 	returnMe := ReaderImpl{
@@ -192,7 +194,7 @@ func NewFromTextForTesting(name string, text string) *ReaderImpl {
 	lines := []*Line{}
 	if len(noExternalNewlines) > 0 {
 		for lineString := range strings.SplitSeq(noExternalNewlines, "\n") {
-			lines = append(lines, new(Line{raw: []byte(lineString)}))
+			lines = append(lines, ptr.To(Line{raw: []byte(lineString)}))
 		}
 	}
 	readingDone := atomic.Bool{}

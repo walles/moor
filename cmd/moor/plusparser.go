@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 // Parses arguments starting with '+':
@@ -59,7 +60,7 @@ func parseLineNumber(withoutPlus string) *linemetadata.Index {
 		lineNumber = 1
 	}
 
-	return new(linemetadata.IndexFromOneBased(int(lineNumber)))
+	return ptr.To(linemetadata.IndexFromOneBased(int(lineNumber)))
 }
 
 func parseSearchPattern(withoutPlus string) *string {
@@ -67,5 +68,5 @@ func parseSearchPattern(withoutPlus string) *string {
 		return nil
 	}
 
-	return new(withoutPlus[1:])
+	return ptr.To(withoutPlus[1:])
 }

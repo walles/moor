@@ -12,7 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal"
 	internalReader "github.com/walles/moor/v2/internal/reader"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 	"golang.org/x/term"
 )
 
@@ -199,7 +199,7 @@ func getColorFormatter() chroma.Formatter {
 }
 
 func pageFromReader(reader *internalReader.ReaderImpl, options Options) error {
-	screen, e := twin.NewScreen()
+	screen, e := twin.NewScreen(twin.Options{})
 	if e != nil {
 		// Screen setup failed
 		return e

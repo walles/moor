@@ -12,7 +12,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 func renderLessTermcapEnvVar(envVarName string, description string, colors twin.ColorCount) string {

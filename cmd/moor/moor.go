@@ -21,12 +21,14 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/term"
 
+	"github.com/walles/twin"
+
 	"github.com/walles/moor/v2/internal"
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/moor/v2/internal/util"
-	"github.com/walles/moor/v2/twin"
 )
 
 var versionString = ""
@@ -357,7 +359,7 @@ func getVersion() string {
 // Can return a nil pager on --help or --version, or if pumping to stdout.
 func pagerFromArgs(
 	args []string,
-	newScreen func(mouseMode twin.MouseMode, terminalColorCount twin.ColorCount) (twin.Screen, error),
+	newScreen func(options twin.Options) (twin.Screen, error),
 	stdinIsRedirected bool,
 	stdoutIsRedirected bool,
 ) (
@@ -579,7 +581,11 @@ func pagerFromArgs(
 
 	// We got the first byte, this means sudo is done (if it was used) and we
 	// can set up the UI.
-	screen, err := newScreen(*mouseMode, *terminalColorsCount)
+	screen, err := newScreen(twin.Options{
+		MouseMode:          *mouseMode,
+		TerminalColorCount: *terminalColorsCount,
+		Logger:             &util.TwinLogger{},
+	})
 	if err != nil {
 		// Ref: https://github.com/walles/moor/issues/149
 		log.Info("Failed to set up screen for paging, pumping to stdout instead: ", err)
@@ -628,7 +634,7 @@ func pagerFromArgs(
 
 	pager.TargetLine = targetLine
 	if *follow && pager.TargetLine == nil {
-		pager.TargetLine = new(linemetadata.IndexMax())
+		pager.TargetLine = ptr.To(linemetadata.IndexMax())
 	}
 
 	return pager, screen, style, &formatter, logsRequested, nil
@@ -638,7 +644,6 @@ func main() {
 	var loglines internal.LogWriter
 	logsRequested := false
 	log.SetOutput(&loglines)
-	twin.SetLogger(&util.TwinLogger{})
 	russiaNotSupported()
 
 	defer func() {
@@ -673,7 +678,7 @@ func main() {
 
 	pager, screen, style, formatter, _logsRequested, err := pagerFromArgs(
 		os.Args,
-		twin.NewScreenWithMouseModeAndColorCount,
+		twin.NewScreen,
 		stdinIsRedirected,
 		stdoutIsRedirected,
 	)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 // Says which line should be at the top of the screen.
@@ -218,7 +219,7 @@ func (si *scrollPositionInternal) handlePositiveDelta(pager *Pager) {
 			return
 		}
 
-		si.lineIndex = new(si.lineIndex.NonWrappingAdd(1))
+		si.lineIndex = ptr.To(si.lineIndex.NonWrappingAdd(1))
 		si.delta -= linemetadata.ScreenLines(len(subLines))
 	}
 }
@@ -375,7 +376,7 @@ func (p *Pager) scrollToEnd() {
 		//
 		// Otherwise, if we're already aiming for some place, don't overwrite
 		// that.
-		p.setTargetLine(new(linemetadata.IndexMax()))
+		p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 	}
 }
 
@@ -423,7 +424,7 @@ func (p *Pager) getLastVisibleLineIndex() *linemetadata.Index {
 		return nil
 	}
 
-	return new(rendered.lines[len(rendered.lines)-1].inputLineIndex)
+	return ptr.To(rendered.lines[len(rendered.lines)-1].inputLineIndex)
 }
 
 // getMaxNumberPrefixLength returns the maximum line number prefix length

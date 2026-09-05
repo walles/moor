@@ -12,11 +12,13 @@ import (
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/google/go-cmp/cmp"
+	"github.com/walles/twin"
+	"gotest.tools/v3/assert"
+
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
-	"gotest.tools/v3/assert"
 )
 
 // NOTE: You can find related tests in screenLines_test.go.
@@ -30,9 +32,9 @@ func TestUnicodeRendering(t *testing.T) {
 	reader := reader.NewFromTextForTesting("", "åäö")
 
 	var answers = []twin.StyledRune{
-		twin.NewStyledRune('å', twin.StyleDefault),
-		twin.NewStyledRune('ä', twin.StyleDefault),
-		twin.NewStyledRune('ö', twin.StyleDefault),
+		{Rune: 'å', Style: twin.StyleDefault},
+		{Rune: 'ä', Style: twin.StyleDefault},
+		{Rune: 'ö', Style: twin.StyleDefault},
 	}
 
 	contents := startPaging(t, reader).GetRow(0)
@@ -56,15 +58,15 @@ func TestFgColorRendering(t *testing.T) {
 		"\x1b[30ma\x1b[31mb\x1b[32mc\x1b[33md\x1b[34me\x1b[35mf\x1b[36mg\x1b[37mh\x1b[0mi")
 
 	var answers = []twin.StyledRune{
-		twin.NewStyledRune('a', twin.StyleDefault.WithForeground(twin.NewColor16(0))),
-		twin.NewStyledRune('b', twin.StyleDefault.WithForeground(twin.NewColor16(1))),
-		twin.NewStyledRune('c', twin.StyleDefault.WithForeground(twin.NewColor16(2))),
-		twin.NewStyledRune('d', twin.StyleDefault.WithForeground(twin.NewColor16(3))),
-		twin.NewStyledRune('e', twin.StyleDefault.WithForeground(twin.NewColor16(4))),
-		twin.NewStyledRune('f', twin.StyleDefault.WithForeground(twin.NewColor16(5))),
-		twin.NewStyledRune('g', twin.StyleDefault.WithForeground(twin.NewColor16(6))),
-		twin.NewStyledRune('h', twin.StyleDefault.WithForeground(twin.NewColor16(7))),
-		twin.NewStyledRune('i', twin.StyleDefault),
+		{Rune: 'a', Style: twin.StyleDefault.WithForeground(twin.NewColor16(0))},
+		{Rune: 'b', Style: twin.StyleDefault.WithForeground(twin.NewColor16(1))},
+		{Rune: 'c', Style: twin.StyleDefault.WithForeground(twin.NewColor16(2))},
+		{Rune: 'd', Style: twin.StyleDefault.WithForeground(twin.NewColor16(3))},
+		{Rune: 'e', Style: twin.StyleDefault.WithForeground(twin.NewColor16(4))},
+		{Rune: 'f', Style: twin.StyleDefault.WithForeground(twin.NewColor16(5))},
+		{Rune: 'g', Style: twin.StyleDefault.WithForeground(twin.NewColor16(6))},
+		{Rune: 'h', Style: twin.StyleDefault.WithForeground(twin.NewColor16(7))},
+		{Rune: 'i', Style: twin.StyleDefault},
 	}
 
 	contents := startPaging(t, reader).GetRow(0)
@@ -83,13 +85,13 @@ func TestBrokenUtf8(t *testing.T) {
 	reader := reader.NewFromTextForTesting("", "abc\xc2def")
 
 	var answers = []twin.StyledRune{
-		twin.NewStyledRune('a', twin.StyleDefault),
-		twin.NewStyledRune('b', twin.StyleDefault),
-		twin.NewStyledRune('c', twin.StyleDefault),
-		twin.NewStyledRune('?', twin.StyleDefault.WithForeground(twin.NewColor16(7)).WithBackground(twin.NewColor16(1))),
-		twin.NewStyledRune('d', twin.StyleDefault),
-		twin.NewStyledRune('e', twin.StyleDefault),
-		twin.NewStyledRune('f', twin.StyleDefault),
+		{Rune: 'a', Style: twin.StyleDefault},
+		{Rune: 'b', Style: twin.StyleDefault},
+		{Rune: 'c', Style: twin.StyleDefault},
+		{Rune: '?', Style: twin.StyleDefault.WithForeground(twin.NewColor16(7)).WithBackground(twin.NewColor16(1))},
+		{Rune: 'd', Style: twin.StyleDefault},
+		{Rune: 'e', Style: twin.StyleDefault},
+		{Rune: 'f', Style: twin.StyleDefault},
 	}
 
 	contents := startPaging(t, reader).GetRow(0)
@@ -297,22 +299,22 @@ func TestCodeHighlighting(t *testing.T) {
 	packageSpaceStyle := twin.StyleDefault.WithForeground(twin.NewColorHex(0x666666))
 	packageNameStyle := twin.StyleDefault.WithForeground(twin.NewColorHex(0xD0D0D0))
 	var answers = []twin.StyledRune{
-		twin.NewStyledRune('p', packageKeywordStyle),
-		twin.NewStyledRune('a', packageKeywordStyle),
-		twin.NewStyledRune('c', packageKeywordStyle),
-		twin.NewStyledRune('k', packageKeywordStyle),
-		twin.NewStyledRune('a', packageKeywordStyle),
-		twin.NewStyledRune('g', packageKeywordStyle),
-		twin.NewStyledRune('e', packageKeywordStyle),
-		twin.NewStyledRune(' ', packageSpaceStyle),
-		twin.NewStyledRune('i', packageNameStyle),
-		twin.NewStyledRune('n', packageNameStyle),
-		twin.NewStyledRune('t', packageNameStyle),
-		twin.NewStyledRune('e', packageNameStyle),
-		twin.NewStyledRune('r', packageNameStyle),
-		twin.NewStyledRune('n', packageNameStyle),
-		twin.NewStyledRune('a', packageNameStyle),
-		twin.NewStyledRune('l', packageNameStyle),
+		{Rune: 'p', Style: packageKeywordStyle},
+		{Rune: 'a', Style: packageKeywordStyle},
+		{Rune: 'c', Style: packageKeywordStyle},
+		{Rune: 'k', Style: packageKeywordStyle},
+		{Rune: 'a', Style: packageKeywordStyle},
+		{Rune: 'g', Style: packageKeywordStyle},
+		{Rune: 'e', Style: packageKeywordStyle},
+		{Rune: ' ', Style: packageSpaceStyle},
+		{Rune: 'i', Style: packageNameStyle},
+		{Rune: 'n', Style: packageNameStyle},
+		{Rune: 't', Style: packageNameStyle},
+		{Rune: 'e', Style: packageNameStyle},
+		{Rune: 'r', Style: packageNameStyle},
+		{Rune: 'n', Style: packageNameStyle},
+		{Rune: 'a', Style: packageNameStyle},
+		{Rune: 'l', Style: packageNameStyle},
 	}
 
 	contents := startPaging(t, reader).GetRow(0)
@@ -329,15 +331,15 @@ func TestCodeHighlight_compressed(t *testing.T) {
 
 	markdownHeading1Style := twin.StyleDefault.WithAttr(twin.AttrBold).WithForeground(twin.NewColorHex(0xffffff))
 	var answers = []twin.StyledRune{
-		twin.NewStyledRune('#', markdownHeading1Style),
-		twin.NewStyledRune(' ', markdownHeading1Style),
-		twin.NewStyledRune('P', markdownHeading1Style),
-		twin.NewStyledRune('r', markdownHeading1Style),
-		twin.NewStyledRune('o', markdownHeading1Style),
-		twin.NewStyledRune(' ', markdownHeading1Style),
-		twin.NewStyledRune('T', markdownHeading1Style),
-		twin.NewStyledRune('i', markdownHeading1Style),
-		twin.NewStyledRune('p', markdownHeading1Style),
+		{Rune: '#', Style: markdownHeading1Style},
+		{Rune: ' ', Style: markdownHeading1Style},
+		{Rune: 'P', Style: markdownHeading1Style},
+		{Rune: 'r', Style: markdownHeading1Style},
+		{Rune: 'o', Style: markdownHeading1Style},
+		{Rune: ' ', Style: markdownHeading1Style},
+		{Rune: 'T', Style: markdownHeading1Style},
+		{Rune: 'i', Style: markdownHeading1Style},
+		{Rune: 'p', Style: markdownHeading1Style},
 	}
 
 	contents := startPaging(t, reader).GetRow(0)
@@ -376,7 +378,7 @@ func TestUnicodePrivateUse(t *testing.T) {
 	renderedRune := startPaging(t, reader).GetRow(0)[0]
 
 	// Make sure we display this character unmodified
-	assertRunesEqual(t, twin.NewStyledRune(char, twin.StyleDefault), renderedRune)
+	assertRunesEqual(t, twin.StyledRune{Rune: char, Style: twin.StyleDefault}, renderedRune)
 }
 
 func resetManPageFormat() {
@@ -402,14 +404,14 @@ func testManPageFormatting(t *testing.T, input string, expected twin.StyledRune)
 }
 
 func TestManPageFormatting(t *testing.T) {
-	testManPageFormatting(t, "n\x08n", twin.NewStyledRune('n', twin.StyleDefault.WithAttr(twin.AttrBold)))
-	testManPageFormatting(t, "_\x08x", twin.NewStyledRune('x', twin.StyleDefault.WithAttr(twin.AttrUnderline)))
+	testManPageFormatting(t, "n\x08n", twin.StyledRune{Rune: 'n', Style: twin.StyleDefault.WithAttr(twin.AttrBold)})
+	testManPageFormatting(t, "_\x08x", twin.StyledRune{Rune: 'x', Style: twin.StyleDefault.WithAttr(twin.AttrUnderline)})
 
 	// Non-breaking space UTF-8 encoded (0xc2a0) should render as a non-breaking unicode space (0xa0)
-	testManPageFormatting(t, string([]byte{0xc2, 0xa0}), twin.NewStyledRune(rune(0xa0), twin.StyleDefault))
+	testManPageFormatting(t, string([]byte{0xc2, 0xa0}), twin.StyledRune{Rune: rune(0xa0), Style: twin.StyleDefault})
 
 	// Corner cases
-	testManPageFormatting(t, "\x08", twin.NewStyledRune('<', twin.StyleDefault.WithForeground(twin.NewColor16(7)).WithBackground(twin.NewColor16(1))))
+	testManPageFormatting(t, "\x08", twin.StyledRune{Rune: '<', Style: twin.StyleDefault.WithForeground(twin.NewColor16(7)).WithBackground(twin.NewColor16(1))})
 
 	// FIXME: Test two consecutive backspaces
 
@@ -486,7 +488,7 @@ func TestScrollToEndLongInput(t *testing.T) {
 	// line holds the last contents line.
 	lastContentsLine := screen.GetRow(screenHeight - 2)
 	firstContentsColumn := len("10_100 ")
-	assertRunesEqual(t, twin.NewStyledRune('X', twin.StyleDefault), lastContentsLine[firstContentsColumn])
+	assertRunesEqual(t, twin.StyledRune{Rune: 'X', Style: twin.StyleDefault}, lastContentsLine[firstContentsColumn])
 }
 
 func TestIsScrolledToEnd_LongFile(t *testing.T) {
@@ -649,7 +651,7 @@ func TestClearToEndOfLine_ClearFromStart(t *testing.T) {
 	var expected []twin.StyledRune
 	for len(expected) < screenWidth {
 		expected = append(expected,
-			twin.NewStyledRune(' ', twin.StyleDefault.WithBackground(twin.NewColor16(4))),
+			twin.StyledRune{Rune: ' ', Style: twin.StyleDefault.WithBackground(twin.NewColor16(4))},
 		)
 	}
 
@@ -663,11 +665,11 @@ func TestClearToEndOfLine_ClearFromNotStart(t *testing.T) {
 
 	screenWidth, _ := screen.Size()
 	expected := []twin.StyledRune{
-		twin.NewStyledRune('a', twin.StyleDefault),
+		{Rune: 'a', Style: twin.StyleDefault},
 	}
 	for len(expected) < screenWidth {
 		expected = append(expected,
-			twin.NewStyledRune(' ', twin.StyleDefault.WithBackground(twin.NewColor16(4))),
+			twin.StyledRune{Rune: ' ', Style: twin.StyleDefault.WithBackground(twin.NewColor16(4))},
 		)
 	}
 
@@ -700,7 +702,7 @@ func TestClearToEndOfLine_ClearFromStartScrolledRight(t *testing.T) {
 	var expected []twin.StyledRune
 	for len(expected) < screenWidth {
 		expected = append(expected,
-			twin.NewStyledRune(' ', twin.StyleDefault.WithBackground(twin.NewColor16(4))),
+			twin.StyledRune{Rune: ' ', Style: twin.StyleDefault.WithBackground(twin.NewColor16(4))},
 		)
 	}
 
@@ -738,8 +740,8 @@ func TestPageWideChars(t *testing.T) {
 func TestTerminalFg(t *testing.T) {
 	reader := reader.NewFromTextForTesting("", "x")
 
-	var styleAnswer = twin.NewStyledRune('x', twin.StyleDefault.WithForeground(twin.NewColor24Bit(0xd0, 0xd0, 0xd0)))
-	var terminalAnswer = twin.NewStyledRune('x', twin.StyleDefault)
+	var styleAnswer = twin.StyledRune{Rune: 'x', Style: twin.StyleDefault.WithForeground(twin.NewColor24Bit(0xd0, 0xd0, 0xd0))}
+	var terminalAnswer = twin.StyledRune{Rune: 'x', Style: twin.StyleDefault}
 
 	assertRunesEqual(t, styleAnswer, startPagingWithTerminalFg(t, reader, false).GetRow(0)[0])
 	assertRunesEqual(t, terminalAnswer, startPagingWithTerminalFg(t, reader, true).GetRow(0)[0])
@@ -772,7 +774,7 @@ func TestHandleMoreLinesAvailableWithEmptyFile(t *testing.T) {
 	pager := NewPager(emptyReader)
 
 	// Simulate --follow mode by setting target to max
-	pager.TargetLine = new(linemetadata.IndexMax())
+	pager.TargetLine = ptr.To(linemetadata.IndexMax())
 
 	// This should not crash when lineCount is 0
 	pager.handleMoreLinesAvailable()
