@@ -245,8 +245,9 @@ You can also `PageFromStream()` or `PageFromFile()`.
 
 # Developing
 
-The `twin` directory contains the library used by `moor` for drawing to the
-terminal screen. See [its README](twin/README.md) for details.
+`moor` draws to the terminal screen using
+[twin](https://github.com/walles/twin), a standalone library originally built
+for `moor` and also usable on its own for building terminal UIs.
 
 You need the [go tools](https://golang.org/doc/install).
 
