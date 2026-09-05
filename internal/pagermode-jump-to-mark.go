@@ -4,7 +4,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 type PagerModeJumpToMark struct {

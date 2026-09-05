@@ -4,7 +4,7 @@ import (
 	"slices"
 	"unicode"
 
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 // Like twin.StyledRune, but with additional metadata

@@ -8,7 +8,7 @@ import (
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 type renderedLine struct {

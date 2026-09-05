@@ -13,7 +13,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
 )
 

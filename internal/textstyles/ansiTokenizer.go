@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 // How do we render unprintable characters?

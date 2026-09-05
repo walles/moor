@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
 )
 

@@ -11,7 +11,7 @@ import (
 	"github.com/go-enry/go-enry/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 // Read and highlight some text using Chroma:

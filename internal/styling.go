@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/chroma/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 // How the moor UI is styled. Set up by styleUI().

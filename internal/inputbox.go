@@ -3,7 +3,7 @@ package internal
 import (
 	"unicode"
 
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 type InputBoxOnTextChanged func(text string)

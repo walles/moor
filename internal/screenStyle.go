@@ -3,7 +3,7 @@ package internal
 import (
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/styles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 )
 
 const defaultDarkTheme = "native"

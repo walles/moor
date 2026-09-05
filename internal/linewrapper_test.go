@@ -6,7 +6,7 @@ import (
 	"gotest.tools/v3/assert"
 
 	"github.com/walles/moor/v2/internal/textstyles"
-	"github.com/walles/moor/v2/twin"
+	"github.com/walles/twin"
 
 	log "github.com/sirupsen/logrus"
 )
