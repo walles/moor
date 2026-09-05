@@ -1,5 +1,11 @@
 module github.com/walles/moor/v2
 
+// Go version policy: No newer than the most recently end-of-lifed Go release,
+// so distro packagers building from source aren't forced onto a toolchain their
+// repos don't have yet.
+//
+// Once this reaches 1.26, the whole internal/ptr package can be replaced with
+// Go's builtin new(expr) instead.
 go 1.25.0
 
 require (
