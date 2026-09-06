@@ -20,7 +20,7 @@ require (
 	github.com/rivo/uniseg v0.4.7
 	github.com/sirupsen/logrus v1.9.4
 	github.com/ulikunitz/xz v0.5.16
-	github.com/walles/twin v0.9.1
+	github.com/walles/twin v0.9.2
 	golang.org/x/term v0.45.0
 	gotest.tools/v3 v3.5.2
 )
