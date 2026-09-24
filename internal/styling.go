@@ -187,6 +187,7 @@ func styleUI(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFo
 	theme.lineNumbers = twin.StyleDefault.WithAttr(twin.AttrDim)
 
 	if chromaStyle == nil || chromaFormatter == nil {
+		log.Trace("No Chroma style, status bar style left at default: ", theme.statusbar)
 		return
 	}
 
@@ -210,19 +211,24 @@ func styleUI(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFo
 		theme.statusbar = *theme.standout
 	} else if statusbarOption == STATUSBAR_STYLE_INVERSE {
 		theme.statusbar = theme.plainText.WithAttr(twin.AttrReverse)
+		log.Trace("Status bar style set to reversed plain text: ", theme.statusbar)
 	} else if statusbarOption == STATUSBAR_STYLE_PLAIN {
 		plain := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.None, false)
 		if plain != nil {
 			theme.statusbar = *plain
+			log.Trace("Status bar style set from Chroma plain text: ", theme.statusbar)
 		} else {
 			theme.statusbar = twin.StyleDefault
+			log.Trace("Status bar style set to default plain: ", theme.statusbar)
 		}
 	} else if statusbarOption == STATUSBAR_STYLE_BOLD {
 		bold := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericStrong, true)
 		if bold != nil {
 			theme.statusbar = *bold
+			log.Trace("Status bar style set from Chroma bold: ", theme.statusbar)
 		} else {
 			theme.statusbar = twin.StyleDefault.WithAttr(twin.AttrBold)
+			log.Trace("Status bar style set to default bold: ", theme.statusbar)
 		}
 	} else {
 		panic(fmt.Sprint("Unrecognized status bar style: ", statusbarOption))
