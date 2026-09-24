@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
@@ -66,7 +67,7 @@ func startPagingInBackground(t *testing.T, pager *Pager, screen *countingScreen)
 
 	pagingDone := make(chan struct{})
 	go func() {
-		pager.StartPaging(screen, nil, nil)
+		pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 		close(pagingDone)
 	}()
 

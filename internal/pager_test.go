@@ -131,7 +131,7 @@ func startPagingWithTabSizeAndScreen(t *testing.T, tabSize int, screen *twin.Fak
 	pager.Quit()
 
 	// Except for just quitting, this also associates our FakeScreen with the Pager
-	pager.StartPaging(screen, nil, nil)
+	pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 
 	// This makes sure at least one frame gets rendered
 	pager.redraw("")
@@ -158,7 +158,7 @@ func startPagingWithTerminalFg(t *testing.T, reader *reader.ReaderImpl, withTerm
 	pager.Quit()
 
 	// Except for just quitting, this also associates our FakeScreen with the Pager
-	pager.StartPaging(screen, styles.Get("native"), &formatters.TTY16m)
+	pager.StartPaging(screen, styles.Get("native"), formatters.TTY16m)
 
 	// This makes sure at least one frame gets rendered
 	pager.redraw("")
@@ -184,7 +184,7 @@ func TestReprintAfterExitUsesCurrentSettings(t *testing.T) {
 
 	// Except for just quitting, this also associates our FakeScreen with the
 	// Pager
-	pager.StartPaging(screen, nil, nil)
+	pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 
 	// This is the frame the main loop would have left behind
 	pager.redraw("")
@@ -226,7 +226,7 @@ func TestReprintAfterExitFillsScreen(t *testing.T) {
 
 			// Except for just quitting, this also associates our FakeScreen with
 			// the Pager
-			pager.StartPaging(screen, nil, nil)
+			pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 
 			assert.Assert(t, pager.fitsOnOneScreen())
 
@@ -442,7 +442,7 @@ func TestScrollToBottomWrapNextToLastLine(t *testing.T) {
 	pager.Quit()
 
 	// Get contents onto our fake screen
-	pager.StartPaging(screen, nil, nil)
+	pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 	pager.redraw("")
 
 	actual := strings.Join([]string{
@@ -476,7 +476,7 @@ func TestScrollToEndLongInput(t *testing.T) {
 	// Connect the pager with a screen
 	const screenHeight = 10
 	screen := twin.NewFakeScreen(20, screenHeight)
-	pager.StartPaging(screen, nil, nil)
+	pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 
 	// This is what we're really testing
 	pager.scrollToEnd()
@@ -622,7 +622,7 @@ func TestPageSamples(t *testing.T) {
 			pager.Quit()
 
 			// Get contents onto our fake screen
-			pager.StartPaging(screen, nil, nil)
+			pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 			pager.redraw("")
 
 			firstReaderLine := myReader.GetLine(linemetadata.Index{})
@@ -690,7 +690,7 @@ func TestClearToEndOfLine_ClearFromStartScrolledRight(t *testing.T) {
 
 	// Except for just quitting, this also associates a FakeScreen with the Pager
 	screen := twin.NewFakeScreen(3, 10)
-	pager.StartPaging(screen, nil, nil)
+	pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 
 	// Scroll right, this is what we're testing
 	pager.leftColumnZeroBased = 44

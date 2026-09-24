@@ -363,7 +363,7 @@ func pagerFromArgs(
 	stdinIsRedirected bool,
 	stdoutIsRedirected bool,
 ) (
-	*internal.Pager, twin.Screen, chroma.Style, *chroma.Formatter, bool, error,
+	*internal.Pager, twin.Screen, chroma.Style, chroma.Formatter, bool, error,
 ) {
 	// FIXME: If we get a CTRL-C, get terminal back into a useful state before terminating
 
@@ -637,7 +637,7 @@ func pagerFromArgs(
 		pager.TargetLine = ptr.To(linemetadata.IndexMax())
 	}
 
-	return pager, screen, style, &formatter, logsRequested, nil
+	return pager, screen, style, formatter, logsRequested, nil
 }
 
 func main() {
@@ -714,7 +714,7 @@ func flagSetFunc[T any](flagSet *flag.FlagSet, name string, defaultValue T, usag
 	return &parsed
 }
 
-func startPaging(pager *internal.Pager, screen twin.Screen, chromaStyle *chroma.Style, chromaFormatter *chroma.Formatter) {
+func startPaging(pager *internal.Pager, screen twin.Screen, chromaStyle *chroma.Style, chromaFormatter chroma.Formatter) {
 	// Handle SIGINT and SIGTERM
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
