@@ -32,7 +32,7 @@ func TestTwinStyleFromChroma(t *testing.T) {
 func TestSetStyle(t *testing.T) {
 	assert.NilError(t, os.Setenv("MOOR_TEST_STYLE", "\x1b[1;31m"))
 	style := twin.StyleDefault
-	setStyle(&style, "MOOR_TEST_STYLE", nil)
+	setStyle("Test", &style, "MOOR_TEST_STYLE", nil)
 
 	assert.Equal(t, style, twin.StyleDefault.WithAttr(twin.AttrBold).WithForeground(twin.NewColor16(1)))
 }

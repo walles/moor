@@ -45,22 +45,37 @@ func defaultUiStyles() uiStyles {
 
 var theme = defaultUiStyles()
 
-func setStyle(updateMe *twin.Style, envVarName string, fallback *twin.Style) {
+// setStyle sets updateMe from the envVarName environment variable if that is
+// set, otherwise from fallback. If neither is usable, updateMe is left as is.
+//
+// name is a human readable name of the style, used for logging.
+func setStyle(name string, updateMe *twin.Style, envVarName string, fallback *twin.Style) {
 	envValue := os.Getenv(envVarName)
 	if envValue == "" {
-		if fallback != nil {
-			*updateMe = *fallback
+		if fallback == nil {
+			log.Trace(name, " style left at default: ", *updateMe)
+			return
 		}
+
+		*updateMe = *fallback
+		log.Trace(name, " style set from Chroma: ", *updateMe)
 		return
 	}
 
 	style, err := TermcapToStyle(envValue)
 	if err != nil {
-		log.Info("Ignoring invalid ", envVarName, ": ", strings.ReplaceAll(envValue, "\x1b", "ESC"), ": ", err)
+		log.Info(
+			"Ignoring invalid ", envVarName,
+			": ", strings.ReplaceAll(envValue, "\x1b", "ESC"),
+			": ", err,
+			", keeping ", name,
+			" style: ", *updateMe,
+		)
 		return
 	}
 
 	*updateMe = style
+	log.Trace(name, " style set from ", envVarName, ": ", *updateMe)
 }
 
 // With exact set, only return a style if the Chroma formatter has an explicit
@@ -115,16 +130,20 @@ func consumeLessTermcapEnvs(terminalBackground *twin.Color, chromaStyle *chroma.
 	// Requested here: https://github.com/walles/moor/issues/14
 
 	setStyle(
+		"Man page bold",
 		&textstyles.ManPageBold,
 		"LESS_TERMCAP_md",
 		twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericStrong, false),
 	)
 	setStyle(
+		"Man page heading",
 		&textstyles.ManPageHeading,
 		"LESS_TERMCAP_md",
 		twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericHeading, false),
 	)
-	setStyle(&textstyles.ManPageUnderline,
+	setStyle(
+		"Man page underline",
+		&textstyles.ManPageUnderline,
 		"LESS_TERMCAP_us",
 		twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericUnderline, false),
 	)
