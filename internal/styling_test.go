@@ -17,7 +17,7 @@ func TestTwinStyleFromChroma(t *testing.T) {
 	style := twinStyleFromChroma(
 		nil,
 		styles.Registry["base16-snazzy"],
-		&formatters.TTY16m,
+		formatters.TTY16m,
 		chroma.GenericHeading,
 		true,
 	)
@@ -32,7 +32,7 @@ func TestTwinStyleFromChroma(t *testing.T) {
 func TestSetStyle(t *testing.T) {
 	assert.NilError(t, os.Setenv("MOOR_TEST_STYLE", "\x1b[1;31m"))
 	style := twin.StyleDefault
-	setStyle(&style, "MOOR_TEST_STYLE", nil)
+	setStyle("Test", &style, "MOOR_TEST_STYLE", nil)
 
 	assert.Equal(t, style, twin.StyleDefault.WithAttr(twin.AttrBold).WithForeground(twin.NewColor16(1)))
 }
@@ -58,8 +58,8 @@ func TestLessTermcapMdControlsBothBoldAndHeadings(t *testing.T) {
 	expectedStyle := twin.StyleDefault.WithAttr(twin.AttrBold).WithForeground(twin.NewColor16(1))
 
 	// Run the setup sequence
-	consumeLessTermcapEnvs(nil, nil, nil)
-	styleUI(nil, nil, nil, STATUSBAR_STYLE_INVERSE, false, false)
+	consumeLessTermcapEnvs(nil, colorlessChromaStyle, formatters.TTY16m)
+	styleUI(nil, colorlessChromaStyle, formatters.TTY16m, STATUSBAR_STYLE_INVERSE, false, false)
 
 	assert.Equal(t, textstyles.ManPageBold, expectedStyle)
 	assert.Equal(t, textstyles.ManPageHeading, expectedStyle)

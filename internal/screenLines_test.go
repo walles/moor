@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/google/go-cmp/cmp"
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/reader"
@@ -254,7 +255,7 @@ func TestWrapping(t *testing.T) {
 	pager.Quit()
 
 	// Get contents onto our fake screen
-	pager.StartPaging(screen, nil, nil)
+	pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
 	pager.redraw("")
 
 	actual := strings.Join([]string{

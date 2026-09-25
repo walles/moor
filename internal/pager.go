@@ -542,8 +542,14 @@ func isUserInput(event twin.Event) bool {
 	return false
 }
 
-// StartPaging brings up the pager on screen
-func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chromaFormatter *chroma.Formatter) {
+// StartPaging brings up the pager on screen.
+//
+// chromaStyle decides how the pager UI is styled, must not be nil.
+func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chromaFormatter chroma.Formatter) {
+	if chromaStyle == nil {
+		panic("chromaStyle must not be nil")
+	}
+
 	log.Info("Pager starting")
 
 	defer func() {

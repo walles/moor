@@ -45,34 +45,51 @@ func defaultUiStyles() uiStyles {
 
 var theme = defaultUiStyles()
 
-func setStyle(updateMe *twin.Style, envVarName string, fallback *twin.Style) {
+// setStyle sets updateMe from the envVarName environment variable if that is
+// set, otherwise from fallback. If neither is usable, updateMe is left as is.
+//
+// name is a human readable name of the style, used for logging.
+func setStyle(name string, updateMe *twin.Style, envVarName string, fallback *twin.Style) {
 	envValue := os.Getenv(envVarName)
 	if envValue == "" {
-		if fallback != nil {
-			*updateMe = *fallback
+		if fallback == nil {
+			log.Trace(name, " style left at default: ", *updateMe)
+			return
 		}
+
+		*updateMe = *fallback
+		log.Trace(name, " style set from Chroma: ", *updateMe)
 		return
 	}
 
 	style, err := TermcapToStyle(envValue)
 	if err != nil {
-		log.Info("Ignoring invalid ", envVarName, ": ", strings.ReplaceAll(envValue, "\x1b", "ESC"), ": ", err)
+		log.Info(
+			"Ignoring invalid ", envVarName,
+			": ", strings.ReplaceAll(envValue, "\x1b", "ESC"),
+			": ", err,
+			", keeping ", name,
+			" style: ", *updateMe,
+		)
 		return
 	}
 
 	*updateMe = style
+	log.Trace(name, " style set from ", envVarName, ": ", *updateMe)
 }
 
 // With exact set, only return a style if the Chroma formatter has an explicit
 // configuration for that style. Otherwise, we might return fallback styles, not
 // exactly matching what you requested.
-func twinStyleFromChroma(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFormatter *chroma.Formatter, chromaToken chroma.TokenType, exact bool) *twin.Style {
-	if chromaStyle == nil || chromaFormatter == nil {
-		return nil
-	}
-
+func twinStyleFromChroma(
+	terminalBackground *twin.Color,
+	chromaStyle *chroma.Style,
+	chromaFormatter chroma.Formatter,
+	chromaToken chroma.TokenType,
+	exact bool,
+) *twin.Style {
 	stringBuilder := strings.Builder{}
-	err := (*chromaFormatter).Format(&stringBuilder, chromaStyle, chroma.Literator(chroma.Token{
+	err := chromaFormatter.Format(&stringBuilder, chromaStyle, chroma.Literator(chroma.Token{
 		Type:  chromaToken,
 		Value: "X",
 	}))
@@ -111,20 +128,24 @@ func twinStyleFromChroma(terminalBackground *twin.Color, chromaStyle *chroma.Sty
 
 // consumeLessTermcapEnvs parses LESS_TERMCAP_xx environment variables and
 // adapts the moor output accordingly.
-func consumeLessTermcapEnvs(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFormatter *chroma.Formatter) {
+func consumeLessTermcapEnvs(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFormatter chroma.Formatter) {
 	// Requested here: https://github.com/walles/moor/issues/14
 
 	setStyle(
+		"Man page bold",
 		&textstyles.ManPageBold,
 		"LESS_TERMCAP_md",
 		twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericStrong, false),
 	)
 	setStyle(
+		"Man page heading",
 		&textstyles.ManPageHeading,
 		"LESS_TERMCAP_md",
 		twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericHeading, false),
 	)
-	setStyle(&textstyles.ManPageUnderline,
+	setStyle(
+		"Man page underline",
+		&textstyles.ManPageUnderline,
 		"LESS_TERMCAP_us",
 		twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericUnderline, false),
 	)
@@ -162,17 +183,24 @@ func getOppositeColor(base twin.Color) twin.Color {
 	}
 }
 
-func styleUI(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFormatter *chroma.Formatter, statusbarOption StatusBarOption, withTerminalFg bool, configureSearchHitLineBackground bool) {
+func styleUI(
+	terminalBackground *twin.Color,
+	chromaStyle *chroma.Style,
+	chromaFormatter chroma.Formatter,
+	statusbarOption StatusBarOption,
+	withTerminalFg bool,
+	configureSearchHitLineBackground bool,
+) {
 	// Set defaults
 	theme.plainText = twin.StyleDefault
 	theme.lineNumbers = twin.StyleDefault.WithAttr(twin.AttrDim)
 
-	if chromaStyle == nil || chromaFormatter == nil {
-		return
-	}
-
 	chromaLineNumbers := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.LineNumbers, true)
-	if chromaLineNumbers != nil && !withTerminalFg {
+	if withTerminalFg {
+		log.Trace("Line numbers style left at default because of --terminal-fg: ", theme.lineNumbers)
+	} else if chromaLineNumbers == nil {
+		log.Trace("Line numbers style left at default, Chroma style has none: ", theme.lineNumbers)
+	} else {
 		// NOTE: We used to dim line numbers here, but Johan found them too hard
 		// to read. If line numbers should look some other way for some Chroma
 		// style, go fix that in Chroma!
@@ -181,7 +209,11 @@ func styleUI(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFo
 	}
 
 	plainText := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.None, false)
-	if plainText != nil && !withTerminalFg {
+	if withTerminalFg {
+		log.Trace("Plain text style left at default because of --terminal-fg: ", theme.plainText)
+	} else if plainText == nil {
+		log.Trace("Plain text style left at default, got none from Chroma: ", theme.plainText)
+	} else {
 		log.Trace("Plain text style set from Chroma: ", *plainText)
 		theme.plainText = *plainText
 	}
@@ -191,19 +223,24 @@ func styleUI(terminalBackground *twin.Color, chromaStyle *chroma.Style, chromaFo
 		theme.statusbar = *theme.standout
 	} else if statusbarOption == STATUSBAR_STYLE_INVERSE {
 		theme.statusbar = theme.plainText.WithAttr(twin.AttrReverse)
+		log.Trace("Status bar style set to reversed plain text: ", theme.statusbar)
 	} else if statusbarOption == STATUSBAR_STYLE_PLAIN {
 		plain := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.None, false)
 		if plain != nil {
 			theme.statusbar = *plain
+			log.Trace("Status bar style set from Chroma plain text: ", theme.statusbar)
 		} else {
 			theme.statusbar = twin.StyleDefault
+			log.Trace("Status bar style set to default plain: ", theme.statusbar)
 		}
 	} else if statusbarOption == STATUSBAR_STYLE_BOLD {
 		bold := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.GenericStrong, true)
 		if bold != nil {
 			theme.statusbar = *bold
+			log.Trace("Status bar style set from Chroma bold: ", theme.statusbar)
 		} else {
 			theme.statusbar = twin.StyleDefault.WithAttr(twin.AttrBold)
+			log.Trace("Status bar style set to default bold: ", theme.statusbar)
 		}
 	} else {
 		panic(fmt.Sprint("Unrecognized status bar style: ", statusbarOption))

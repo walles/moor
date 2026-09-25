@@ -249,7 +249,7 @@ func pageFromReaderWithScreen(reader *internalReader.ReaderImpl, screen twin.Scr
 		}
 	}()
 
-	pager.StartPaging(screen, &style, &formatter)
+	pager.StartPaging(screen, &style, formatter)
 
 	return nil
 }
