@@ -196,7 +196,11 @@ func styleUI(
 	theme.lineNumbers = twin.StyleDefault.WithAttr(twin.AttrDim)
 
 	chromaLineNumbers := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.LineNumbers, true)
-	if chromaLineNumbers != nil && !withTerminalFg {
+	if withTerminalFg {
+		log.Trace("Line numbers style left at default because of --terminal-fg: ", theme.lineNumbers)
+	} else if chromaLineNumbers == nil {
+		log.Trace("Line numbers style left at default, Chroma style has none: ", theme.lineNumbers)
+	} else {
 		// NOTE: We used to dim line numbers here, but Johan found them too hard
 		// to read. If line numbers should look some other way for some Chroma
 		// style, go fix that in Chroma!
@@ -205,7 +209,11 @@ func styleUI(
 	}
 
 	plainText := twinStyleFromChroma(terminalBackground, chromaStyle, chromaFormatter, chroma.None, false)
-	if plainText != nil && !withTerminalFg {
+	if withTerminalFg {
+		log.Trace("Plain text style left at default because of --terminal-fg: ", theme.plainText)
+	} else if plainText == nil {
+		log.Trace("Plain text style left at default, got none from Chroma: ", theme.plainText)
+	} else {
 		log.Trace("Plain text style set from Chroma: ", *plainText)
 		theme.plainText = *plainText
 	}
