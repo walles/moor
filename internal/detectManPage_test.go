@@ -44,6 +44,42 @@ func TestDetectManPageByContents(t *testing.T) {
 	}
 }
 
+// Man pages formatted with SGR escapes or none at all have no overstrike, but
+// they still open with a title line like "LS(1)  General Commands  LS(1)". That
+// is what BusyBox man (as shipped with w64devkit) gives us.
+//
+// Ref: https://github.com/walles/moor/issues/475
+func TestDetectManPageByHeader(t *testing.T) {
+	log.SetLevel(log.WarnLevel)
+
+	for _, header := range []string{
+		"LS(1)                        w64devkit Manual                        LS(1)",
+		"\x1b[1mLS(1)\x1b[0m                  General Commands Manual                 \x1b[1mLS(1)\x1b[0m",
+		"IBUS EMOJI(7)                    User Commands                    IBUS EMOJI(7)",
+		"gdbus()                                                                 gdbus()",
+		"buildah-manifest-exists(1)()                       buildah-manifest-exists(1)()",
+
+		// groff truncates long titles, sometimes right up against the middle text
+		"libpipew...-loopback(7) Miscellaneous Information Manuallibpipew...-loopback(7)",
+	} {
+		text := header + "\n\nNAME\n       ls - list directory contents\n"
+		pager := pagerForManPageDetection(t, text)
+		assert.Check(t, pager.haveLoadedManPage(), "header should be detected: %q", header)
+	}
+}
+
+func TestDetectManPageIgnoresNonHeaders(t *testing.T) {
+	log.SetLevel(log.WarnLevel)
+
+	for _, text := range []string{
+		"LS(1)                        w64devkit Manual                        LS(8)\n",
+		"printf(1)\n",
+	} {
+		pager := pagerForManPageDetection(t, text)
+		assert.Check(t, !pager.haveLoadedManPage(), "should not be detected: %q", text)
+	}
+}
+
 // Text with no overstrike anywhere is not a man page, however long it is.
 func TestDetectManPageIgnoresUnformattedText(t *testing.T) {
 	log.SetLevel(log.WarnLevel)

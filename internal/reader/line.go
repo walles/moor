@@ -84,6 +84,10 @@ func (line *Line) HasManPageFormatting() bool {
 	return textstyles.HasManPageFormatting(line.rawString())
 }
 
+func (line *Line) IsManPageTitleLine() bool {
+	return textstyles.IsManPageTitleLine(line.rawString())
+}
+
 // The index is for error reporting. Set DisablePlainCachingForBenchmarking to
 // false to simulate a cache miss for benchmarking.
 func (line *Line) Plain(index linemetadata.Index) string {
