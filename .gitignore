@@ -9,3 +9,4 @@
 # what the directory is for. See .windows-vm-io/README.md
 /.windows-vm-io/*
 !/.windows-vm-io/README.md
+.devenv

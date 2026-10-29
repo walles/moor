@@ -136,6 +136,62 @@ func editorAcceptsPlusLine(editorCommand string) bool {
 	return false
 }
 
+// resolveEditorCommand returns the raw editor command string from
+// $VISUAL/$EDITOR, or a fallback list. Returns an error if no usable editor is found.
+func resolveEditorCommand() (string, error) {
+	editor, editorEnv, err := pickAnEditor()
+	if err != nil {
+		return "", err
+	}
+
+	firstWord := strings.Fields(editor)[0]
+	editorPath, err := exec.LookPath(firstWord)
+	if err != nil {
+		return "", fmt.Errorf("failed to find editor %s from $%s: %w", firstWord, editorEnv, err)
+	}
+	if err := errUnlessExecutable(editorPath); err != nil {
+		return "", fmt.Errorf("editor from $%s not executable: %w", editorEnv, err)
+	}
+
+	return editor, nil
+}
+
+// editorFormat returns the format string (e.g. "+%l %f") for the given editor command.
+// NOTE: If you change the classic template, make sure it works with both "nano" and "code -w" (VSCode).
+func editorFormat(editorCommand string) string {
+	if format := strings.TrimSpace(os.Getenv("EDITOR_FORMAT")); format != "" {
+		return format
+	}
+	if editorAcceptsPlusLine(strings.Fields(editorCommand)[0]) {
+		// vim / nano / etc all center the requested line on screen, so aim for
+		// the middle of moor's screen to match what the user was actually
+		// looking at.
+		return "+%l %f"
+	}
+	return "%f"
+}
+
+func editorTemplate(editorCommand string) string {
+	return editorCommand + " " + editorFormat(editorCommand)
+}
+
+// buildCommandWithArgs turns an editor command string + file path into exec args.
+func buildCommandWithArgs(editorCommand, filePath string, middleLine *linemetadata.Index) ([]string, string) {
+	lineNumber := 1
+	if middleLine != nil {
+		lineNumber = middleLine.Index() + 1
+	}
+
+	tmpl := editorTemplate(editorCommand)
+	hasLine := strings.Contains(tmpl, "%l")
+	s := strings.ReplaceAll(tmpl, "%l", fmt.Sprintf("%d", lineNumber))
+	s = strings.ReplaceAll(s, "%f", filePath)
+	if hasLine {
+		return strings.Fields(s), fmt.Sprintf(" (at line %d)", lineNumber)
+	}
+	return strings.Fields(s), ""
+}
+
 func handleEditingRequest(p *Pager) {
 	if os.Getenv("LESSSECURE") == "1" {
 		p.mode = &PagerModeInfo{
@@ -145,43 +201,25 @@ func handleEditingRequest(p *Pager) {
 		return
 	}
 
-	editor, editorEnv, err := pickAnEditor()
+	editorCommand, err := resolveEditorCommand()
 	if err != nil {
 		log.Warn("Failed to find an editor: ", err)
 		return
 	}
 
-	// Tyre kicking check that we can find the editor either in the PATH or as
-	// an absolute path
-	firstWord := strings.Fields(editor)[0]
-	editorPath, err := exec.LookPath(firstWord)
-	if err != nil {
-		// FIXME: Show a message in the status bar instead? Nothing wrong with
-		// moor here.
-		log.Warn("Failed to find editor "+firstWord+" from $"+editorEnv+": ", err)
-		return
-	}
-
-	// Check that the editor is executable
-	err = errUnlessExecutable(editorPath)
-	if err != nil {
-		// FIXME: Show a message in the status bar instead? Nothing wrong with
-		// moor here.
-		log.Warn("Editor from {} not executable: {}", editorEnv, err)
-		return
-	}
-
-	canOpenFile := p.readers[p.currentReader].FileName != nil
+	canOpenFile := false
 	if p.readers[p.currentReader].FileName != nil {
 		// Verify that the file exists and is readable
-		err = reader.TryOpen(*p.readers[p.currentReader].FileName)
+		err := reader.TryOpen(*p.readers[p.currentReader].FileName)
 		if err != nil {
-			canOpenFile = false
 			log.Info("File to edit is not readable: ", err)
+		} else {
+			canOpenFile = true
 		}
 	}
 
 	var fileToEdit string
+	var tempCleanup func()
 	if canOpenFile {
 		fileToEdit = *p.readers[p.currentReader].FileName
 	} else {
@@ -190,42 +228,28 @@ func handleEditingRequest(p *Pager) {
 		// wanted to wait, they should have done that themselves.
 
 		// Create a temp file based on reader contents
+		var err error
 		fileToEdit, err = dumpToTempFile(p.readers[p.currentReader])
 		if err != nil {
 			log.Warn("Failed to create temp file to edit: ", err)
 			return
 		}
 
-		// Clean up the temp file
-		defer func() {
+		tempCleanup = func() {
 			err = os.Remove(fileToEdit)
 			if err != nil {
 				log.Warn("Failed to remove temp file ", fileToEdit, ": ", err)
 			} else {
 				log.Debug("Removed temp file: ", fileToEdit)
 			}
-		}()
+		}
+	}
+	if tempCleanup != nil {
+		defer tempCleanup()
 	}
 
 	err = p.screen.PauseAndCall(func() error {
-		// NOTE: If you do any changes here, make sure they work with both "nano"
-		// and "code -w" (VSCode).
-		commandWithArgs := strings.Fields(editor)
-
-		lineInfo := ""
-		// add line number argument if editor is supported
-		//
-		// vim / nano / etc all center the requested line on screen, so aim for
-		// the middle of moor's screen to match what the user was actually
-		// looking at.
-		if middleLine := middleVisibleLine(p); middleLine != nil && editorAcceptsPlusLine(commandWithArgs[0]) {
-			lineNumber := middleLine.Index() + 1
-			lineInfo = fmt.Sprintf(" (at line %d)", lineNumber)
-			commandWithArgs = append(commandWithArgs, fmt.Sprintf("+%d", lineNumber))
-		}
-
-		commandWithArgs = append(commandWithArgs, fileToEdit)
-
+		commandWithArgs, lineInfo := buildCommandWithArgs(editorCommand, fileToEdit, middleVisibleLine(p))
 		log.Info("'v' pressed, launching editor", lineInfo, ": ", commandWithArgs)
 		command := exec.Command(commandWithArgs[0], commandWithArgs[1:]...)
 
@@ -254,7 +278,7 @@ func handleEditingRequest(p *Pager) {
 		log.Warn("Failed to launch editor in paused session: ", err)
 		p.mode = &PagerModeInfo{
 			Pager: p,
-			Text:  "Failed to launch editor \"" + editor + "\": " + err.Error(),
+			Text:  "Failed to launch editor \"" + editorCommand + "\": " + err.Error(),
 		}
 
 		return
