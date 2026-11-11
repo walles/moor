@@ -162,7 +162,6 @@ func TestSwitchingFilesRemembersHorizontalScroll(t *testing.T) {
 // marks from there makes no sense.
 func TestNoFileSwitchingOrMarksFromHelp(t *testing.T) {
 	pager := newFileSwitchingTestPager(t)
-	pager.bookmarks = make(map[rune]scrollPosition)
 
 	pager.mode.onRune('h')
 	assert.Assert(t, pager.isShowingHelp)

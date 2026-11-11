@@ -22,7 +22,6 @@ func newMarksTestPager(t *testing.T, readers ...*reader.ReaderImpl) *Pager {
 
 	pager := NewPager(readers...)
 	pager.screen = twin.NewFakeScreen(20, 10)
-	pager.bookmarks = make(map[rune]scrollPosition)
 	return pager
 }
 
@@ -60,9 +59,7 @@ func TestJumpingToMarkStopsFollowing(t *testing.T) {
 func newTwoFilesMarksTestPager(t *testing.T) *Pager {
 	t.Helper()
 
-	pager := newFileSwitchingTestPager(t)
-	pager.bookmarks = make(map[rune]scrollPosition)
-	return pager
+	return newFileSwitchingTestPager(t)
 }
 
 func setMark(pager *Pager, topLineZeroBased int, mark rune) {

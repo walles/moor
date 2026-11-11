@@ -155,10 +155,11 @@ type Pager struct {
 	// to the right.
 	longestLineLength int
 
-	// Bookmarks that you can come back to.
+	// Bookmarks that you can come back to. Shared between all readers, so
+	// jumping to a mark can take you to another reader.
 	//
 	// Ref: https://github.com/walles/moor/issues/175
-	bookmarks map[rune]scrollPosition
+	bookmarks map[rune]bookmark
 
 	// Maximum width instead of reported screen width
 	Width int
@@ -181,6 +182,15 @@ type readerView struct {
 	leftColumnZeroBased int
 
 	filter search.Search
+}
+
+// A line in one of our readers
+type bookmark struct {
+	view int // Index into Pager.views
+
+	// Unfiltered, so that the mark still points to the same line after the
+	// filter has changed
+	line linemetadata.Number
 }
 
 type _PreHelpState struct {
@@ -292,6 +302,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		scrollPosition:              newScrollPosition(name),
 		WithSearchHitLineBackground: true,
 		Width:                       0,
+		bookmarks:                   make(map[rune]bookmark),
 	}
 
 	pager.mode = PagerModeViewing{pager: &pager}
@@ -657,7 +668,6 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	p.screen = screen
 	p.mode = PagerModeViewing{pager: p}
-	p.bookmarks = make(map[rune]scrollPosition)
 
 	p.initTargetLines()
 

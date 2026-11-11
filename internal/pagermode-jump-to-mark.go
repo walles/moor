@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 
@@ -70,11 +71,28 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 		return
 	}
 
-	destination, ok := m.pager.bookmarks[char]
-	if ok {
-		m.pager.scrollPosition = destination
-		m.pager.setTargetLine(nil)
+	p := m.pager
+
+	// Before switching files, switchToFile() wants to be viewing
+	p.mode = PagerModeViewing(m)
+
+	destination, ok := p.bookmarks[char]
+	if !ok {
+		return
 	}
 
-	m.pager.mode = PagerModeViewing(m)
+	p.switchToFile(destination.view)
+
+	index, hidden := p.filteringReader.findLine(destination.line)
+	if index == nil {
+		p.scrollPosition = newScrollPosition("Jump to mark")
+	} else {
+		p.scrollPosition = NewScrollPositionFromIndex(*index, "Jump to mark")
+	}
+	p.setTargetLine(nil)
+
+	if hidden {
+		// We are now right above where the mark would have been
+		p.mode = &PagerModeInfo{Pager: p, Text: fmt.Sprintf("Mark %c is hidden by the filter", char)}
+	}
 }

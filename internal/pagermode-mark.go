@@ -1,6 +1,10 @@
 package internal
 
-import "github.com/walles/twin"
+import (
+	"github.com/walles/twin"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+)
 
 type PagerModeMark struct {
 	pager *Pager
@@ -37,6 +41,15 @@ func (m PagerModeMark) onKey(key twin.KeyCode) {
 }
 
 func (m PagerModeMark) onRune(char rune) {
-	m.pager.bookmarks[char] = m.pager.scrollPosition
-	m.pager.mode = PagerModeViewing(m)
+	p := m.pager
+
+	lineNumber := linemetadata.NumberFromZeroBased(0)
+	if index := p.lineIndex(); index != nil {
+		if line := p.Reader().GetLine(*index); line != nil {
+			lineNumber = line.Number
+		}
+	}
+
+	p.bookmarks[char] = bookmark{view: p.currentReader, line: lineNumber}
+	p.mode = PagerModeViewing(m)
 }
