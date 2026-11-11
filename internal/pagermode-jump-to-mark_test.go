@@ -10,6 +10,7 @@ import (
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
+	"github.com/walles/moor/v2/internal/search"
 )
 
 func newMarksTestPager(t *testing.T, readers ...*reader.ReaderImpl) *Pager {
@@ -54,4 +55,108 @@ func TestJumpingToMarkStopsFollowing(t *testing.T) {
 	assert.Assert(t, pager.isViewing())
 	assert.Assert(t, pager.TargetLine == nil)
 	assert.Equal(t, pager.lineIndex().Index(), 10)
+}
+
+func newTwoFilesMarksTestPager(t *testing.T) *Pager {
+	t.Helper()
+
+	pager := newFileSwitchingTestPager(t)
+	pager.bookmarks = make(map[rune]scrollPosition)
+	return pager
+}
+
+func setMark(pager *Pager, topLineZeroBased int, mark rune) {
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(topLineZeroBased), "test")
+	pager.mode.onRune('m')
+	pager.mode.onRune(mark)
+}
+
+func jumpToMark(pager *Pager, mark rune) {
+	pager.mode.onRune('\'')
+	pager.mode.onRune(mark)
+}
+
+func TestJumpToMarkInOtherFile(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.nextFile()
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(50), "test")
+
+	jumpToMark(pager, 'x')
+	assert.Equal(t, pager.currentReader, 0)
+	assert.Equal(t, firstRenderedLine(t, pager), "a100")
+	assert.Assert(t, pager.isViewing())
+
+	// Switching back to the other file should take us to where we were there
+	pager.nextFile()
+	assert.Equal(t, firstRenderedLine(t, pager), "b50")
+}
+
+// Marks are global, so setting x in one file should replace x in another
+func TestSettingMarkInOtherFileReplacesIt(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.nextFile()
+	setMark(pager, 50, 'x')
+
+	pager.previousFile()
+	jumpToMark(pager, 'x')
+	assert.Equal(t, pager.currentReader, 1)
+	assert.Equal(t, firstRenderedLine(t, pager), "b50")
+}
+
+func TestMarkSurvivesAddingFilter(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.filter.For("a1")
+	jumpToMark(pager, 'x')
+	assert.Equal(t, firstRenderedLine(t, pager), "a100")
+	assert.Assert(t, pager.isViewing())
+}
+
+func TestMarkSurvivesRemovingFilter(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	pager.filter.For("a2")
+
+	// Filtered line 1 is a20, after a2
+	setMark(pager, 1, 'x')
+
+	pager.filter = search.Search{}
+	jumpToMark(pager, 'x')
+	assert.Equal(t, firstRenderedLine(t, pager), "a20")
+	assert.Assert(t, pager.isViewing())
+}
+
+// If the marked line is hidden by the filter, show the closest line above it
+// at the top. Right below that is where the marked line would have been.
+func TestJumpToMarkHiddenByFilter(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.filter.For("a2")
+	jumpToMark(pager, 'x')
+	assert.Equal(t, firstRenderedLine(t, pager), "a29")
+
+	info, isInfo := pager.mode.(*PagerModeInfo)
+	assert.Assert(t, isInfo, "Expected an info message, got %T", pager.mode)
+	assert.Equal(t, info.Text, "Mark x is hidden by the filter")
+}
+
+// If the marked line is hidden by the filter, and there are no lines above it,
+// go to the top.
+func TestJumpToMarkHiddenByFilterNothingAbove(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 1, 'x')
+
+	pager.filter.For("a2")
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(50), "test")
+	jumpToMark(pager, 'x')
+	assert.Equal(t, firstRenderedLine(t, pager), "a2")
+
+	info, isInfo := pager.mode.(*PagerModeInfo)
+	assert.Assert(t, isInfo, "Expected an info message, got %T", pager.mode)
+	assert.Equal(t, info.Text, "Mark x is hidden by the filter")
 }
