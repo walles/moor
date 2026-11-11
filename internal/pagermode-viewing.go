@@ -20,8 +20,8 @@ func (m PagerModeViewing) drawFooter(filenameText string, statusText string, spi
 	prefix := ""
 	colonHelp := ""
 	m.pager.readerLock.Lock()
-	if len(m.pager.readers) > 1 {
-		prefix = fmt.Sprintf("[%d/%d] ", m.pager.currentReader+1, len(m.pager.readers))
+	if len(m.pager.views) > 1 {
+		prefix = fmt.Sprintf("[%d/%d] ", m.pager.currentReader+1, len(m.pager.views))
 		colonHelp = "':' to switch, "
 	}
 	m.pager.readerLock.Unlock()
@@ -198,7 +198,7 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.setTargetLine(nil)
 
 	case ':':
-		if len(p.readers) > 1 {
+		if len(p.views) > 1 {
 			// Don't touch TargetLine here. Following pauses anyway while not
 			// viewing, and if the user switches files we want to remember
 			// whether they were following.

@@ -49,9 +49,10 @@ type eventMaybeDone struct{}
 
 // Pager is the main on-screen pager
 type Pager struct {
-	readers       []*reader.ReaderImpl // Immutable since startup, no locking needed
-	currentReader int                  // Index into the readers slice
-	readerLock    sync.Mutex           // Protects currentReader
+	// One per input. The number of views is fixed since startup.
+	views         []readerView
+	currentReader int        // Index into the views slice
+	readerLock    sync.Mutex // Protects currentReader and the views' readers
 
 	readerSwitched chan struct{}
 
@@ -159,6 +160,12 @@ type Pager struct {
 	Width int
 }
 
+// What we know about one of our inputs
+type readerView struct {
+	// Replaced when reloading, see ReloadCurrentReader()
+	reader *reader.ReaderImpl
+}
+
 type _PreHelpState struct {
 	scrollPosition      scrollPosition
 	leftColumnZeroBased int
@@ -247,8 +254,13 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		name = "Pager " + *readers[0].DisplayName
 	}
 
+	views := make([]readerView, len(readers))
+	for i, r := range readers {
+		views[i] = readerView{reader: r}
+	}
+
 	pager := Pager{
-		readers:                     readers,
+		views:                       views,
 		currentReader:               0,
 		readerSwitched:              make(chan struct{}, 1),
 		quit:                        false,
@@ -439,7 +451,7 @@ func (p *Pager) ReloadCurrentReader() {
 	p.readerLock.Lock()
 	defer p.readerLock.Unlock()
 
-	current := p.readers[p.currentReader]
+	current := p.views[p.currentReader].reader
 	if !current.ReadingDone.Load() || !current.HighlightingDone.Load() {
 		// The reader's formatting options (like the Style) are fully populated only
 		// once the initial read/highlighting pass consumes them from its channels.
@@ -462,7 +474,7 @@ func (p *Pager) ReloadCurrentReader() {
 	}
 
 	current.Close()
-	p.readers[p.currentReader] = clone
+	p.views[p.currentReader].reader = clone
 	p.filteringReader.SetBackingReader(clone)
 
 	select {
@@ -534,7 +546,7 @@ func (p *Pager) handleMoreLinesAvailable() {
 // the reader knows how many lines it needs to fetch.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 	p.readerLock.Lock()
-	r := p.readers[p.currentReader]
+	r := p.views[p.currentReader].reader
 	p.readerLock.Unlock()
 
 	log.Trace("Pager: Setting target line to ", targetLine, "...")
@@ -585,7 +597,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	defer func() {
 		p.readerLock.Lock()
-		r := p.readers[p.currentReader]
+		r := p.views[p.currentReader].reader
 		p.readerLock.Unlock()
 
 		if r.Err != nil {
@@ -632,14 +644,14 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 		// Support throttling of more-lines-available reads, see below
 		p.readerLock.Lock()
-		throttledMoreLines := p.readers[p.currentReader].MoreLinesAdded
+		throttledMoreLines := p.views[p.currentReader].reader.MoreLinesAdded
 		p.readerLock.Unlock()
 
 		var reenable <-chan time.Time
 
 		for {
 			p.readerLock.Lock()
-			r := p.readers[p.currentReader]
+			r := p.views[p.currentReader].reader
 			p.readerLock.Unlock()
 
 			select {
@@ -648,7 +660,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				p.filter = search.Search{}
 
 				p.readerLock.Lock()
-				r = p.readers[p.currentReader]
+				r = p.views[p.currentReader].reader
 				p.filteringReader.SetBackingReader(r)
 				p.readerLock.Unlock()
 
@@ -716,7 +728,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			// on the way out we never get that far.
 
 			p.readerLock.Lock()
-			r := p.readers[p.currentReader]
+			r := p.views[p.currentReader].reader
 			p.readerLock.Unlock()
 
 			// Read this before looking at the contents, never after: highlighting
@@ -761,7 +773,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			// keypress rather than the whole session.
 			holdPaint := canQuit && !p.sawUserInput
 			if !holdPaint {
-				quitIfOneScreenApplies := p.QuitIfOneScreen && !p.isShowingHelp && len(p.readers) == 1
+				quitIfOneScreenApplies := p.QuitIfOneScreen && !p.isShowingHelp && len(p.views) == 1
 				stillReading := !r.ReadingDone.Load()
 				if quitIfOneScreenApplies && stillReading && !paintedWhileReading {
 					// Remembered so that if this does turn into the #464
@@ -827,7 +839,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			//
 			// See also noLineNumbersDefault() where we use environment
 			// variables to try to detect man paging.
-			if p.haveLoadedManPage() && len(p.readers) == 1 {
+			if p.haveLoadedManPage() && len(p.views) == 1 {
 				p.ShowLineNumbers = false
 				p.showLineNumbers = false
 				log.Info("man page detected by contents, disabling line numbers")
@@ -849,7 +861,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 //
 // This way nothing gets scrolled off screen after we exit.
 func (p *Pager) fitsOnOneScreenWrapped() bool {
-	if len(p.readers) != 1 {
+	if len(p.views) != 1 {
 		// At most one screen will fit on one screen...
 		return false
 	}
@@ -873,7 +885,7 @@ func (p *Pager) fitsOnOneScreenWrapped() bool {
 	// Create a fake pager for that screen, with no status bar, and matching
 	// line number settings + tab size and wrap settings
 	p.readerLock.Lock()
-	fakePager := NewPager(p.readers[0])
+	fakePager := NewPager(p.views[0].reader)
 	p.readerLock.Unlock()
 	fakePager.screen = testScreen
 
@@ -901,7 +913,7 @@ func (p *Pager) fitsOnOneScreenWrapped() bool {
 // https://github.com/gwsw/less/blob/ff8869aa0485f7188d942723c9fb50afb1892e62/command.c#L828-L831
 func (p *Pager) canQuitIfOneScreen(r *reader.ReaderImpl) bool {
 	// Only with exactly one reader, because that's what less does
-	if len(p.readers) != 1 {
+	if len(p.views) != 1 {
 		return false
 	}
 
@@ -918,7 +930,7 @@ func (p *Pager) canQuitIfOneScreen(r *reader.ReaderImpl) bool {
 }
 
 func (p *Pager) fitsOnOneScreen() bool {
-	if len(p.readers) != 1 {
+	if len(p.views) != 1 {
 		// At most one screen will fit on one screen...
 		return false
 	}
@@ -931,7 +943,7 @@ func (p *Pager) fitsOnOneScreen() bool {
 	height -= p.DeInitFalseMargin
 
 	p.readerLock.Lock()
-	reader := p.readers[0]
+	reader := p.views[0].reader
 	p.readerLock.Unlock()
 
 	if reader.GetLineCount() > height {

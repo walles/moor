@@ -433,7 +433,7 @@ func TestScrollToBottomWrapNextToLastLine(t *testing.T) {
 	pager.showLineNumbers = false
 	pager.screen = screen
 
-	assert.NilError(t, pager.readers[pager.currentReader].Wait())
+	assert.NilError(t, pager.views[pager.currentReader].reader.Wait())
 
 	// This is what we're testing really
 	pager.scrollToEnd()

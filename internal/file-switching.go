@@ -26,8 +26,8 @@ func (p *Pager) nextFile() {
 	defer p.readerLock.Unlock()
 
 	newIndex := p.currentReader + 1
-	if newIndex >= len(p.readers) {
-		newIndex = len(p.readers) - 1
+	if newIndex >= len(p.views) {
+		newIndex = len(p.views) - 1
 	}
 	p.switchToFile(newIndex)
 	log.Tracef("Switched to next file, index %d", p.currentReader)
