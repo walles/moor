@@ -160,10 +160,23 @@ type Pager struct {
 	Width int
 }
 
-// What we know about one of our inputs
+// What we know about one of our inputs.
+//
+// For the current reader, the live state is in the Pager fields
+// (TargetLine, scrollPosition, leftColumnZeroBased and filter). The fields
+// below are saved when switching away from a reader and restored when
+// switching back, see switchToFile().
 type readerView struct {
 	// Replaced when reloading, see ReloadCurrentReader()
 	reader *reader.ReaderImpl
+
+	// Where to go when switching back to this reader. Nil means the top,
+	// IndexMax() means following the end of the input.
+	targetLine *linemetadata.Index
+
+	leftColumnZeroBased int
+
+	filter search.Search
 }
 
 type _PreHelpState struct {
@@ -656,12 +669,10 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 			select {
 			case <-p.readerSwitched:
-				// A different reader is now active
-				p.filter = search.Search{}
-
+				// A different reader is now active. The main loop has already
+				// switched filteringReader over to it, see switchToFile().
 				p.readerLock.Lock()
 				r = p.views[p.currentReader].reader
-				p.filteringReader.SetBackingReader(r)
 				p.readerLock.Unlock()
 
 				// Look in the right place for more lines

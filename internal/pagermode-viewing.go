@@ -198,6 +198,12 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.setTargetLine(nil)
 
 	case ':':
+		if p.isShowingHelp {
+			// Help is shown in front of all files, so switching files from
+			// there makes no sense
+			break
+		}
+
 		if len(p.views) > 1 {
 			// Don't touch TargetLine here. Following pauses anyway while not
 			// viewing, and if the user switches files we want to remember
@@ -216,10 +222,19 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.scrollToPreviousSearchHit()
 
 	case 'm':
+		if p.isShowingHelp {
+			// Marks point into files, not into the help text
+			break
+		}
 		p.mode = PagerModeMark{pager: p}
 		p.setTargetLine(nil)
 
 	case '\'':
+		if p.isShowingHelp {
+			// Marks point into files, not into the help text
+			break
+		}
+
 		// Don't touch TargetLine here. Following pauses anyway while not
 		// viewing, and the user might not jump anywhere.
 		p.mode = PagerModeJumpToMark{pager: p}
