@@ -43,3 +43,20 @@ func TestIssue426SwitchingToSmallerFileClearsStaleScrollPosition(t *testing.T) {
 	assert.Equal(t, renderedToString(rendered.lines[0].cells), "small")
 	assert.Equal(t, pager.lineIndex().Index(), 0)
 }
+
+// Opening the ':' prompt and then cancelling it should not stop following.
+func TestCancellingColonPromptKeepsFollowing(t *testing.T) {
+	pager := NewPager(
+		reader.NewFromTextForTesting("a", "a\n"),
+		reader.NewFromTextForTesting("b", "b\n"),
+	)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.setTargetLine(ptr.To(linemetadata.IndexMax()))
+
+	pager.mode.onRune(':')
+	pager.mode.onKey(twin.KeyEscape)
+
+	assert.Assert(t, pager.isViewing())
+	assert.Assert(t, pager.TargetLine != nil)
+	assert.Equal(t, *pager.TargetLine, linemetadata.IndexMax())
+}
