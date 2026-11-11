@@ -784,3 +784,20 @@ func TestHandleMoreLinesAvailableWithEmptyFile(t *testing.T) {
 		t.Error("Expected TargetLine to remain set when no lines available")
 	}
 }
+
+// Showing an info message, like "Word wrapping enabled", should not stop us
+// from scrolling to where we were heading.
+func TestHandleMoreLinesAvailableWhileShowingInfo(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("line\n", 100))
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(50)))
+	pager.mode = &PagerModeInfo{Pager: pager, Text: "Word wrapping enabled"}
+
+	pager.handleMoreLinesAvailable()
+
+	assert.Assert(t, pager.TargetLine == nil, "Target line should have been reached")
+	assert.Equal(t, pager.lineIndex().Index(), 50)
+}
