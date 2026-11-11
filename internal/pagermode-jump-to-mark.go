@@ -73,6 +73,7 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 	destination, ok := m.pager.bookmarks[char]
 	if ok {
 		m.pager.scrollPosition = destination
+		m.pager.setTargetLine(nil)
 	}
 
 	m.pager.mode = PagerModeViewing(m)

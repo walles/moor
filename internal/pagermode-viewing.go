@@ -199,8 +199,10 @@ func (m PagerModeViewing) onRune(char rune) {
 
 	case ':':
 		if len(p.readers) > 1 {
+			// Don't touch TargetLine here. Following pauses anyway while not
+			// viewing, and if the user switches files we want to remember
+			// whether they were following.
 			p.mode = &PagerModeColonCommand{pager: p}
-			p.setTargetLine(nil)
 		} else {
 			p.mode = &PagerModeInfo{Pager: p, Text: "Pass more files on the command line to be able to switch between them."}
 		}
@@ -218,8 +220,9 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.setTargetLine(nil)
 
 	case '\'':
+		// Don't touch TargetLine here. Following pauses anyway while not
+		// viewing, and the user might not jump anywhere.
 		p.mode = PagerModeJumpToMark{pager: p}
-		p.setTargetLine(nil)
 
 	case 'w':
 		p.WrapLongLines = !p.WrapLongLines
