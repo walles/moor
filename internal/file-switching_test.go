@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -59,4 +60,116 @@ func TestCancellingColonPromptKeepsFollowing(t *testing.T) {
 	assert.Assert(t, pager.isViewing())
 	assert.Assert(t, pager.TargetLine != nil)
 	assert.Equal(t, *pager.TargetLine, linemetadata.IndexMax())
+}
+
+func linesForTesting(prefix string, count int) string {
+	var sb strings.Builder
+	for i := range count {
+		fmt.Fprintf(&sb, "%s%d\n", prefix, i)
+	}
+	return sb.String()
+}
+
+func newFileSwitchingTestPager(t *testing.T) *Pager {
+	t.Helper()
+
+	a := reader.NewFromTextForTesting("a", linesForTesting("a", 300))
+	b := reader.NewFromTextForTesting("b", linesForTesting("b", 300))
+	assert.NilError(t, a.Wait())
+	assert.NilError(t, b.Wait())
+
+	pager := NewPager(a, b)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+	return pager
+}
+
+func firstRenderedLine(t *testing.T, pager *Pager) string {
+	t.Helper()
+
+	rendered := pager.renderLines()
+	assert.Assert(t, len(rendered.lines) > 0)
+	return strings.TrimRight(renderedToString(rendered.lines[0].cells), " ")
+}
+
+func TestSwitchingFilesRemembersPositions(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(100), "test")
+	pager.nextFile()
+	assert.Equal(t, firstRenderedLine(t, pager), "b0")
+
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(200), "test")
+	pager.previousFile()
+	assert.Equal(t, firstRenderedLine(t, pager), "a100")
+
+	pager.nextFile()
+	assert.Equal(t, firstRenderedLine(t, pager), "b200")
+
+	pager.firstFile()
+	assert.Equal(t, firstRenderedLine(t, pager), "a100")
+}
+
+func TestSwitchingFilesRemembersFilters(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+
+	pager.filter.For("a2")
+	assert.Equal(t, firstRenderedLine(t, pager), "a2")
+
+	pager.nextFile()
+	assert.Assert(t, !pager.filter.Active())
+	assert.Equal(t, firstRenderedLine(t, pager), "b0")
+
+	pager.previousFile()
+	assert.Equal(t, pager.filter.String(), "a2")
+	assert.Equal(t, firstRenderedLine(t, pager), "a2")
+}
+
+func TestSwitchingFilesRemembersFollowing(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+
+	pager.setTargetLine(ptr.To(linemetadata.IndexMax()))
+	pager.handleMoreLinesAvailable()
+	assert.Assert(t, pager.isScrolledToEnd())
+
+	pager.nextFile()
+	assert.Assert(t, pager.TargetLine == nil)
+	assert.Equal(t, firstRenderedLine(t, pager), "b0")
+
+	pager.previousFile()
+	assert.Assert(t, pager.TargetLine != nil)
+	assert.Equal(t, *pager.TargetLine, linemetadata.IndexMax())
+	assert.Assert(t, pager.isScrolledToEnd())
+}
+
+func TestSwitchingFilesRemembersHorizontalScroll(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+
+	pager.leftColumnZeroBased = 5
+	pager.nextFile()
+	assert.Equal(t, pager.leftColumnZeroBased, 0)
+
+	pager.leftColumnZeroBased = 7
+	pager.previousFile()
+	assert.Equal(t, pager.leftColumnZeroBased, 5)
+
+	pager.nextFile()
+	assert.Equal(t, pager.leftColumnZeroBased, 7)
+}
+
+// The help screen is shown in front of all files, so switching files or using
+// marks from there makes no sense.
+func TestNoFileSwitchingOrMarksFromHelp(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+	pager.bookmarks = make(map[rune]scrollPosition)
+
+	pager.mode.onRune('h')
+	assert.Assert(t, pager.isShowingHelp)
+
+	for _, char := range []rune{':', 'm', '\''} {
+		pager.mode.onRune(char)
+		_, isViewing := pager.mode.(PagerModeViewing)
+		assert.Assert(t, isViewing, "Expected '%c' to be ignored while showing help, got %T", char, pager.mode)
+	}
 }
