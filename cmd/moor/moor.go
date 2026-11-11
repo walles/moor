@@ -24,8 +24,6 @@ import (
 	"github.com/walles/twin"
 
 	"github.com/walles/moor/v2/internal"
-	"github.com/walles/moor/v2/internal/linemetadata"
-	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/moor/v2/internal/util"
@@ -633,9 +631,7 @@ func pagerFromArgs(
 	}
 
 	pager.TargetLine = targetLine
-	if *follow && pager.TargetLine == nil {
-		pager.TargetLine = ptr.To(linemetadata.IndexMax())
-	}
+	pager.Follow = *follow
 
 	return pager, screen, style, formatter, logsRequested, nil
 }

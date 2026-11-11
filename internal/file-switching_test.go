@@ -173,3 +173,31 @@ func TestNoFileSwitchingOrMarksFromHelp(t *testing.T) {
 		assert.Assert(t, isViewing, "Expected '%c' to be ignored while showing help, got %T", char, pager.mode)
 	}
 }
+
+// --follow should apply to all files, not just the first one
+func TestFollowAppliesToAllFiles(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+	pager.Follow = true
+	pager.initTargetLines()
+	pager.handleMoreLinesAvailable()
+	assert.Assert(t, pager.isScrolledToEnd())
+
+	pager.nextFile()
+	assert.Assert(t, pager.TargetLine != nil)
+	assert.Equal(t, *pager.TargetLine, linemetadata.IndexMax())
+	assert.Assert(t, pager.isScrolledToEnd())
+}
+
+// +1234 is a position in the first file only, but the other files should
+// still follow with --follow
+func TestTargetLineAppliesToFirstFileOnly(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+	pager.TargetLine = ptr.To(linemetadata.IndexFromZeroBased(100))
+	pager.Follow = true
+	pager.initTargetLines()
+	pager.handleMoreLinesAvailable()
+	assert.Equal(t, firstRenderedLine(t, pager), "a100")
+
+	pager.nextFile()
+	assert.Assert(t, pager.isScrolledToEnd())
+}

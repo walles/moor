@@ -133,6 +133,10 @@ type Pager struct {
 	// pager!
 	TargetLine *linemetadata.Index
 
+	// Follow the end of every input, like "tail -f". For the first input,
+	// TargetLine wins over this.
+	Follow bool
+
 	// If true, pager will clear the screen on return. If false, pager will
 	// clear the last line, and show the cursor.
 	DeInit bool
@@ -555,6 +559,28 @@ func (p *Pager) handleMoreLinesAvailable() {
 	p.setTargetLine(nil)
 }
 
+// Decide where each reader starts out. TargetLine (from +1234) is about the
+// first reader only, while Follow applies to all of them.
+func (p *Pager) initTargetLines() {
+	targetLine := p.TargetLine
+	if p.Follow && targetLine == nil {
+		targetLine = ptr.To(linemetadata.IndexMax())
+	}
+
+	// Make sure the reader knows how many lines we want
+	p.setTargetLine(targetLine)
+
+	if !p.Follow {
+		return
+	}
+	for i := range p.views {
+		if i == p.currentReader {
+			continue
+		}
+		p.views[i].targetLine = ptr.To(linemetadata.IndexMax())
+	}
+}
+
 // Except for setting TargetLine, this method also syncs with the reader so that
 // the reader knows how many lines it needs to fetch.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
@@ -633,8 +659,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 	p.mode = PagerModeViewing{pager: p}
 	p.bookmarks = make(map[rune]scrollPosition)
 
-	// Make sure the reader knows how many lines we want
-	p.setTargetLine(p.TargetLine)
+	p.initTargetLines()
 
 	if p.InitialSearch != "" {
 		// Trigger the initial search as if the user pressed "/", typed a query and pressed Enter
