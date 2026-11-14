@@ -74,13 +74,21 @@ func (m PagerModeJumpToMark) onKey(key twin.KeyCode) {
 }
 
 func (m PagerModeJumpToMark) onRune(char rune) {
-	if len(m.pager.bookmarks) == 0 && char == 'm' && !m.pager.isShowingHelp {
-		// The prompt told the user to press 'm' to set a mark, see getMarkPrompt()
-		m.pager.mode = PagerModeMark(m)
+	p := m.pager
+
+	if len(p.bookmarks) == 0 {
+		if char == 'm' && !p.isShowingHelp {
+			// The prompt told the user to press 'm' to set a mark, see getMarkPrompt()
+			p.mode = PagerModeMark(m)
+			return
+		}
+
+		// Nothing to jump to, never mind
+		p.mode = PagerModeViewing(m)
+		p.mode.onRune(char)
+		p.scrollTowardsTargetLine()
 		return
 	}
-
-	p := m.pager
 
 	// Before switching files, switchToFile() wants to be viewing
 	p.mode = PagerModeViewing(m)

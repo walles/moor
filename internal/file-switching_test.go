@@ -213,6 +213,10 @@ func TestCancellingPromptsCatchesUpWithFollowing(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			pager := newFileSwitchingTestPager(t)
 
+			// So that 'y' below is a mark that isn't set. With no marks at all,
+			// 'y' would scroll up instead.
+			setMark(pager, 0, 'x')
+
 			// Following, but no new lines have arrived since we started
 			pager.setTargetLine(ptr.To(linemetadata.IndexMax()))
 			assert.Assert(t, !pager.isScrolledToEnd())
