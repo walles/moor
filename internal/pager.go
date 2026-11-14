@@ -96,10 +96,16 @@ type Pager struct {
 	isShowingHelp bool
 	preHelpState  *_PreHelpState
 
-	// User preference
+	// Whether files start out showing line numbers. What's on screen right
+	// now is in showLineNumbers.
+	//
+	// Turned off if a single input looks like a man page, see
+	// haveLoadedManPage().
 	ShowLineNumbers bool
 
-	// Current state, initialized in StartPaging()
+	// What's on screen right now. Starts out as ShowLineNumbers, scrolling
+	// sideways changes it, and each file remembers its own, see
+	// switchToFile().
 	showLineNumbers bool
 
 	StatusBarStyle StatusBarOption
@@ -313,8 +319,6 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 		currentView:                 0,
 		readerSwitched:              make(chan struct{}, 1),
 		quit:                        false,
-		ShowLineNumbers:             true, // Constant throghout the lifetime of the pager
-		showLineNumbers:             true, // Will be updated over time
 		ShowStatusBar:               true,
 		DeInit:                      true,
 		SideScrollAmount:            16,
