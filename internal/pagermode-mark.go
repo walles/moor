@@ -1,6 +1,8 @@
 package internal
 
 import (
+	"fmt"
+
 	"github.com/walles/twin"
 
 	"github.com/walles/moor/v2/internal/linemetadata"
@@ -54,8 +56,17 @@ func (m PagerModeMark) onRune(char rune) {
 		}
 	}
 
-	p.bookmarks[char] = bookmark{view: p.currentReader, line: lineNumber}
-	p.mode = PagerModeViewing(m)
+	newMark := bookmark{view: p.currentReader, line: lineNumber}
+	oldMark, existed := p.bookmarks[char]
+	p.bookmarks[char] = newMark
+
+	// Marks are invisible, so confirm what happened. Replacing a mark in
+	// another file is easy to do by mistake.
+	message := fmt.Sprintf("Mark %c set", char)
+	if existed && oldMark != newMark {
+		message = fmt.Sprintf("Mark %c moved", char)
+	}
+	p.mode = &PagerModeInfo{Pager: p, Text: message}
 
 	// Following paused while the prompt was open, catch up now rather than
 	// when the next line arrives
