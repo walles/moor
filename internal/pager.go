@@ -93,9 +93,6 @@ type Pager struct {
 
 	filter search.Search
 
-	// We used to have a "Following" field here. If you want to follow, set
-	// TargetLineNumber to linemetadata.IndexMax() instead, see below.
-
 	isShowingHelp bool
 	preHelpState  *_PreHelpState
 
@@ -126,8 +123,12 @@ type Pager struct {
 
 	TabSize int // Number of spaces per tab, default 8, should be positive
 
-	// If non-nil, scroll to this line as soon as possible. Set this value to
-	// IndexMax() to follow the end of the input (tail).
+	// If non-nil, scroll to this line as soon as possible. IndexMax() means
+	// following the end of the input (tail).
+	//
+	// Set before StartPaging(), this applies to the first input only. To follow
+	// all inputs, set Follow instead. While paging, this is about the current
+	// input, the other inputs keep theirs in readerView.targetLine.
 	//
 	// NOTE: Always use setTargetLine() to keep the reader in sync with the
 	// pager!
@@ -167,11 +168,10 @@ type Pager struct {
 
 // What we know about one of our inputs.
 //
-// For the current reader, the live state is in the Pager fields
-// (TargetLine, scrollPosition, leftColumnZeroBased, showLineNumbers and
-// filter). The fields
-// below are saved when switching away from a reader and restored when
-// switching back, see switchToFile().
+// For the current reader, the live state is in the Pager fields (TargetLine,
+// scrollPosition, leftColumnZeroBased, showLineNumbers and filter). The fields
+// below are saved when switching away from a reader and restored when switching
+// back, see switchToFile().
 type readerView struct {
 	// Replaced when reloading, see ReloadCurrentReader()
 	reader *reader.ReaderImpl

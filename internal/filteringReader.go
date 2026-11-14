@@ -165,8 +165,11 @@ func (f *FilteringReader) shouldPassThrough() bool {
 
 // Find the index of the line with this unfiltered line number.
 //
-// If the filter hides that line, return the closest line above it, and hidden
-// true. If there is no such line, return nil.
+// If the filter hides that line, return the closest shown line above it, and
+// hidden true. If no shown line is at or above it, return nil and hidden true.
+//
+// Without a filter, a line past the end (the file shrank) gives the last line.
+// With no lines at all, return nil.
 func (f *FilteringReader) findLine(number linemetadata.Number) (index *linemetadata.Index, hidden bool) {
 	if f.shouldPassThrough() {
 		lineCount := f.BackingReader.GetLineCount()

@@ -110,7 +110,8 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 	p.setTargetLine(nil)
 
 	if hidden {
-		// We are now right above where the mark would have been
+		// We are now at the closest shown line above the mark, or at the top
+		// if there is none
 		p.mode = &PagerModeInfo{Pager: p, Text: fmt.Sprintf("Mark %c is hidden by the filter", char)}
 	}
 }
