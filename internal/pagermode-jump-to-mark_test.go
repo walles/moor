@@ -56,12 +56,6 @@ func TestJumpingToMarkStopsFollowing(t *testing.T) {
 	assert.Equal(t, pager.lineIndex().Index(), 10)
 }
 
-func newTwoFilesMarksTestPager(t *testing.T) *Pager {
-	t.Helper()
-
-	return newFileSwitchingTestPager(t)
-}
-
 func setMark(pager *Pager, topLineZeroBased int, mark rune) {
 	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(topLineZeroBased), "test")
 	pager.mode.onRune('m')
@@ -74,7 +68,7 @@ func jumpToMark(pager *Pager, mark rune) {
 }
 
 func TestJumpToMarkInOtherFile(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.nextFile()
@@ -92,7 +86,7 @@ func TestJumpToMarkInOtherFile(t *testing.T) {
 
 // Marks are global, so setting x in one file should replace x in another
 func TestSettingMarkInOtherFileReplacesIt(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.nextFile()
@@ -105,7 +99,7 @@ func TestSettingMarkInOtherFileReplacesIt(t *testing.T) {
 }
 
 func TestMarkSurvivesAddingFilter(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.filter.For("a1")
@@ -115,7 +109,7 @@ func TestMarkSurvivesAddingFilter(t *testing.T) {
 }
 
 func TestMarkSurvivesRemovingFilter(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	pager.filter.For("a2")
 
 	// Filtered line 1 is a20, after a2
@@ -130,7 +124,7 @@ func TestMarkSurvivesRemovingFilter(t *testing.T) {
 // If the marked line is hidden by the filter, show the closest line above it
 // at the top. Right below that is where the marked line would have been.
 func TestJumpToMarkHiddenByFilter(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.filter.For("a2")
@@ -145,7 +139,7 @@ func TestJumpToMarkHiddenByFilter(t *testing.T) {
 // If the marked line is hidden by the filter, and there are no lines above it,
 // go to the top.
 func TestJumpToMarkHiddenByFilterNothingAbove(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 1, 'x')
 
 	pager.filter.For("a2")
@@ -160,7 +154,7 @@ func TestJumpToMarkHiddenByFilterNothingAbove(t *testing.T) {
 
 // Jumping to a mark from help should leave help and go to the mark
 func TestJumpToMarkFromHelp(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.nextFile()
@@ -182,7 +176,7 @@ func TestJumpToMarkFromHelp(t *testing.T) {
 
 // Leaving help is only worth it if we're going somewhere
 func TestJumpToMissingMarkFromHelpStaysInHelp(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.mode.onRune('h')
@@ -197,7 +191,7 @@ func TestJumpToMissingMarkFromHelpStaysInHelp(t *testing.T) {
 // With no marks set, the jump prompt offers to set one. Not from help though,
 // there is no file line to mark there.
 func TestNoSettingMarksFromHelpJumpPrompt(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 
 	pager.mode.onRune('h')
 	pager.mode.onRune('\'')
@@ -216,7 +210,7 @@ func TestNoSettingMarksFromHelpJumpPrompt(t *testing.T) {
 // Typing a letter that isn't a mark should say so, rather than silently doing
 // nothing
 func TestJumpToMissingMarkSaysSo(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(50), "test")
 
@@ -230,7 +224,7 @@ func TestJumpToMissingMarkSaysSo(t *testing.T) {
 
 // Cancelling the jump prompt is not a mistake, so no message
 func TestCancellingJumpToMarkSaysNothing(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	pager.mode.onRune('\'')
@@ -241,7 +235,7 @@ func TestCancellingJumpToMarkSaysNothing(t *testing.T) {
 // Setting a mark doesn't move the view, so it shouldn't stop following. The
 // mark should be on the line that was at the top when 'm' was pressed.
 func TestSettingMarkKeepsFollowing(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(10), "test")
 
 	// Following, but no new lines have arrived since we started
@@ -268,7 +262,7 @@ func assertInfoMessage(t *testing.T, pager *Pager, expected string) {
 
 // Marks are invisible, so confirm that one got set
 func TestSettingMarkSaysSo(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 
 	setMark(pager, 100, 'x')
 	assertInfoMessage(t, pager, "Mark x set")
@@ -280,7 +274,7 @@ func TestSettingMarkSaysSo(t *testing.T) {
 
 // Replacing a mark, possibly in another file, deserves a heads up
 func TestReplacingMarkSaysSo(t *testing.T) {
-	pager := newTwoFilesMarksTestPager(t)
+	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
 
 	setMark(pager, 50, 'x')
