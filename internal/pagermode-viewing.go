@@ -230,11 +230,9 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.setTargetLine(nil)
 
 	case '\'':
-		if p.isShowingHelp {
-			// Marks point into files, not into the help text
-			break
-		}
-
+		// This works from help as well, jumping to a mark leaves help. See
+		// PagerModeJumpToMark.onRune().
+		//
 		// Don't touch TargetLine here. Following pauses anyway while not
 		// viewing, and the user might not jump anywhere.
 		p.mode = PagerModeJumpToMark{pager: p}

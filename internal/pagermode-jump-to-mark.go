@@ -27,6 +27,10 @@ func (m PagerModeJumpToMark) drawFooter(_ string, _ string, _ string) {
 func (m PagerModeJumpToMark) getMarkPrompt() string {
 	// Special case having zero, one or multiple marks
 	if len(m.pager.bookmarks) == 0 {
+		if m.pager.isShowingHelp {
+			// Marks point into files, there is nothing to mark in help
+			return "No marks set"
+		}
 		return "No marks set, press 'm' to set one!"
 	}
 
@@ -66,7 +70,7 @@ func (m PagerModeJumpToMark) onKey(key twin.KeyCode) {
 }
 
 func (m PagerModeJumpToMark) onRune(char rune) {
-	if len(m.pager.bookmarks) == 0 && char == 'm' {
+	if len(m.pager.bookmarks) == 0 && char == 'm' && !m.pager.isShowingHelp {
 		m.pager.mode = PagerModeMark(m)
 		return
 	}
@@ -79,6 +83,11 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 	destination, ok := p.bookmarks[char]
 	if !ok {
 		return
+	}
+
+	if p.isShowingHelp {
+		// Marks point into files, so go back to the files before jumping
+		p.Quit()
 	}
 
 	p.switchToFile(destination.view)
