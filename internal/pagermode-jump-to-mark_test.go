@@ -221,8 +221,6 @@ func TestJumpPromptWithoutMarksPassesKeysOn(t *testing.T) {
 	assert.Assert(t, pager.lineIndex().Index() > 0, "Expected 'f' to scroll down")
 }
 
-// Typing a letter that isn't a mark should say so, rather than silently doing
-// nothing
 func TestJumpToMissingMarkSaysSo(t *testing.T) {
 	pager := newFileSwitchingTestPager(t)
 	setMark(pager, 100, 'x')
