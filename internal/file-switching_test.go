@@ -205,6 +205,8 @@ func TestCancellingPromptsCatchesUpWithFollowing(t *testing.T) {
 	for name, keys := range map[string][]keypress{
 		"colon then ESC":       {{char: ':'}, {key: twin.KeyEscape}},
 		"colon then q":         {{char: ':'}, {char: 'q'}},
+		"colon then p":         {{char: ':'}, {char: 'p'}}, // Already first, no switch
+		"colon then x":         {{char: ':'}, {char: 'x'}}, // Already first, no switch
 		"mark jump then ESC":   {{char: '\''}, {key: twin.KeyEscape}},
 		"mark jump then Enter": {{char: '\''}, {key: twin.KeyEnter}},
 		"mark jump not set":    {{char: '\''}, {char: 'y'}},
