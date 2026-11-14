@@ -216,9 +216,9 @@ type bookmark struct {
 }
 
 type _PreHelpState struct {
-	scrollPosition      scrollPosition
-	leftColumnZeroBased int
-	targetLine          *linemetadata.Index
+	scrollPosition scrollPosition
+	horizontal     horizontalPosition
+	targetLine     *linemetadata.Index
 }
 
 var _HelpReader = reader.NewFromTextForTesting("Help", `
@@ -458,7 +458,7 @@ func (p *Pager) Quit() {
 	// Reset help
 	p.isShowingHelp = false
 	p.scrollPosition = p.preHelpState.scrollPosition
-	p.leftColumnZeroBased = p.preHelpState.leftColumnZeroBased
+	p.setHorizontalPosition(p.preHelpState.horizontal)
 	p.setTargetLine(p.preHelpState.targetLine)
 	p.preHelpState = nil
 }

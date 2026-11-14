@@ -113,9 +113,9 @@ func (m PagerModeViewing) onRune(char rune) {
 		}
 
 		p.preHelpState = &_PreHelpState{
-			scrollPosition:      p.scrollPosition,
-			leftColumnZeroBased: p.leftColumnZeroBased,
-			targetLine:          p.TargetLine,
+			scrollPosition: p.scrollPosition,
+			horizontal:     p.getHorizontalPosition(),
+			targetLine:     p.TargetLine,
 		}
 		p.scrollPosition = newScrollPosition("Pager scroll position")
 		p.leftColumnZeroBased = 0
