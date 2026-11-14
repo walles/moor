@@ -157,3 +157,54 @@ func TestJumpToMarkHiddenByFilterNothingAbove(t *testing.T) {
 	assert.Assert(t, isInfo, "Expected an info message, got %T", pager.mode)
 	assert.Equal(t, info.Text, "Mark x is hidden by the filter")
 }
+
+// Jumping to a mark from help should leave help and go to the mark
+func TestJumpToMarkFromHelp(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.nextFile()
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(50), "test")
+
+	pager.mode.onRune('h')
+	assert.Assert(t, pager.isShowingHelp)
+
+	jumpToMark(pager, 'x')
+	assert.Assert(t, !pager.isShowingHelp)
+	assert.Assert(t, pager.isViewing())
+	assert.Equal(t, pager.currentReader, 0)
+	assert.Equal(t, firstRenderedLine(t, pager), "a100")
+
+	// The other file should still be where it was before help
+	pager.nextFile()
+	assert.Equal(t, firstRenderedLine(t, pager), "b50")
+}
+
+// Leaving help is only worth it if we're going somewhere
+func TestJumpToMissingMarkFromHelpStaysInHelp(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.mode.onRune('h')
+	jumpToMark(pager, 'y')
+	assert.Assert(t, pager.isShowingHelp)
+	assert.Assert(t, pager.isViewing())
+}
+
+// With no marks set, the jump prompt offers to set one. Not from help though,
+// there is no file line to mark there.
+func TestNoSettingMarksFromHelpJumpPrompt(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+
+	pager.mode.onRune('h')
+	pager.mode.onRune('\'')
+
+	jumpMode, isJumping := pager.mode.(PagerModeJumpToMark)
+	assert.Assert(t, isJumping, "Expected the jump prompt, got %T", pager.mode)
+	assert.Equal(t, jumpMode.getMarkPrompt(), "No marks set")
+
+	pager.mode.onRune('m')
+	assert.Assert(t, pager.isShowingHelp)
+	assert.Assert(t, pager.isViewing())
+	assert.Equal(t, len(pager.bookmarks), 0)
+}

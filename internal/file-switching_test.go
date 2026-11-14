@@ -158,15 +158,15 @@ func TestSwitchingFilesRemembersHorizontalScroll(t *testing.T) {
 	assert.Equal(t, pager.leftColumnZeroBased, 7)
 }
 
-// The help screen is shown in front of all files, so switching files or using
-// marks from there makes no sense.
-func TestNoFileSwitchingOrMarksFromHelp(t *testing.T) {
+// The help screen is shown in front of all files. "Next" and "previous" file
+// are unclear from there, and there is no file line to mark.
+func TestNoFileSwitchingOrSettingMarksFromHelp(t *testing.T) {
 	pager := newFileSwitchingTestPager(t)
 
 	pager.mode.onRune('h')
 	assert.Assert(t, pager.isShowingHelp)
 
-	for _, char := range []rune{':', 'm', '\''} {
+	for _, char := range []rune{':', 'm'} {
 		pager.mode.onRune(char)
 		_, isViewing := pager.mode.(PagerModeViewing)
 		assert.Assert(t, isViewing, "Expected '%c' to be ignored while showing help, got %T", char, pager.mode)
