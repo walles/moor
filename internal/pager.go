@@ -561,7 +561,7 @@ func (p *Pager) followIfScrolledToEnd() {
 	p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 }
 
-func (p *Pager) handleMoreLinesAvailable() {
+func (p *Pager) scrollTowardsTargetLine() {
 	// Without the isViewing() check, following will continue while
 	// searching, and I prefer it to stop so people can see what they
 	// are searching in.
@@ -898,7 +898,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			return
 
 		case eventMoreLinesAvailable:
-			p.handleMoreLinesAvailable()
+			p.scrollTowardsTargetLine()
 
 		case eventMaybeDone:
 			// Man pages come pre-formatted for the screen width, and line

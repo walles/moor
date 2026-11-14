@@ -55,7 +55,7 @@ func (p *Pager) switchToFile(newIndex int) {
 
 	// Go to the target line now if we can, rather than showing the top of the
 	// file until more lines arrive
-	p.handleMoreLinesAvailable()
+	p.scrollTowardsTargetLine()
 
 	log.Tracef("Switched to file index %d", p.currentReader)
 

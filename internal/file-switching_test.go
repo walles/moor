@@ -130,7 +130,7 @@ func TestSwitchingFilesRemembersFollowing(t *testing.T) {
 	pager := newFileSwitchingTestPager(t)
 
 	pager.setTargetLine(ptr.To(linemetadata.IndexMax()))
-	pager.handleMoreLinesAvailable()
+	pager.scrollTowardsTargetLine()
 	assert.Assert(t, pager.isScrolledToEnd())
 
 	pager.nextFile()
@@ -178,7 +178,7 @@ func TestFollowAppliesToAllFiles(t *testing.T) {
 	pager := newFileSwitchingTestPager(t)
 	pager.Follow = true
 	pager.initTargetLines()
-	pager.handleMoreLinesAvailable()
+	pager.scrollTowardsTargetLine()
 	assert.Assert(t, pager.isScrolledToEnd())
 
 	pager.nextFile()
@@ -194,7 +194,7 @@ func TestTargetLineAppliesToFirstFileOnly(t *testing.T) {
 	pager.TargetLine = ptr.To(linemetadata.IndexFromZeroBased(100))
 	pager.Follow = true
 	pager.initTargetLines()
-	pager.handleMoreLinesAvailable()
+	pager.scrollTowardsTargetLine()
 	assert.Equal(t, firstRenderedLine(t, pager), "a100")
 
 	pager.nextFile()

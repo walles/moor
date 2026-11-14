@@ -70,7 +70,7 @@ func (m PagerModeJumpToMark) onKey(key twin.KeyCode) {
 
 	// Following paused while the prompt was open, catch up now rather than
 	// when the next line arrives
-	p.handleMoreLinesAvailable()
+	p.scrollTowardsTargetLine()
 }
 
 func (m PagerModeJumpToMark) onRune(char rune) {
@@ -90,7 +90,7 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 
 		// Following paused while the prompt was open, catch up now rather
 		// than when the next line arrives
-		p.handleMoreLinesAvailable()
+		p.scrollTowardsTargetLine()
 		return
 	}
 
