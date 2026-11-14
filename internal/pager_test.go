@@ -801,3 +801,27 @@ func TestHandleMoreLinesAvailableWhileShowingInfo(t *testing.T) {
 	assert.Assert(t, pager.TargetLine == nil, "Target line should have been reached")
 	assert.Equal(t, pager.lineIndex().Index(), 50)
 }
+
+// Leaving help should restore both the column and whether the line numbers were
+// shown. Otherwise we can end up scrolled right with the line numbers shown.
+func TestLeavingHelpRestoresLineNumbers(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("line\n", 100))
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.showLineNumbers = false
+	pager.leftColumnZeroBased = 16
+
+	pager.mode.onRune('h')
+	assert.Assert(t, pager.isShowingHelp)
+
+	// Scrolling left in help shows the line numbers
+	pager.moveRight(-1)
+	assert.Assert(t, pager.showLineNumbers)
+
+	pager.Quit()
+	assert.Assert(t, !pager.isShowingHelp)
+	assert.Equal(t, pager.leftColumnZeroBased, 16)
+	assert.Assert(t, !pager.showLineNumbers)
+}
