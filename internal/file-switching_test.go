@@ -236,6 +236,7 @@ func TestCancellingPromptsCatchesUpWithFollowing(t *testing.T) {
 		"mark jump then ESC":   {{char: '\''}, {key: twin.KeyEscape}},
 		"mark jump then Enter": {{char: '\''}, {key: twin.KeyEnter}},
 		"mark jump not set":    {{char: '\''}, {char: 'y'}},
+		"set mark then ESC":    {{char: 'm'}, {key: twin.KeyEscape}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			pager := newFileSwitchingTestPager(t)

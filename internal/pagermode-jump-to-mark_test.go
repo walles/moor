@@ -237,3 +237,23 @@ func TestCancellingJumpToMarkSaysNothing(t *testing.T) {
 	pager.mode.onKey(twin.KeyEscape)
 	assert.Assert(t, pager.isViewing())
 }
+
+// Setting a mark doesn't move the view, so it shouldn't stop following. The
+// mark should be on the line that was at the top when 'm' was pressed.
+func TestSettingMarkKeepsFollowing(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(10), "test")
+
+	// Following, but no new lines have arrived since we started
+	pager.setTargetLine(ptr.To(linemetadata.IndexMax()))
+
+	pager.mode.onRune('m')
+	pager.mode.onRune('x')
+	assert.Assert(t, pager.TargetLine != nil)
+	assert.Equal(t, *pager.TargetLine, linemetadata.IndexMax())
+	assert.Assert(t, pager.isScrolledToEnd())
+
+	jumpToMark(pager, 'x')
+	assert.Equal(t, firstRenderedLine(t, pager), "a10")
+	assert.Assert(t, pager.TargetLine == nil)
+}
