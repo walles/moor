@@ -116,7 +116,6 @@ func TestFollowingWorksAfterSwitchingFiles(t *testing.T) {
 
 	pager := NewPager(a, b)
 	pager.ShowLineNumbers = false
-	pager.Follow = true
 	screen := startPagingLoop(t, pager)
 	screen.waitForRow(t, "a0")
 
@@ -127,6 +126,7 @@ func TestFollowingWorksAfterSwitchingFiles(t *testing.T) {
 
 	screen.typeRunes(":n")
 	screen.waitForRow(t, "b0")
+	screen.typeRunes("G") // Start following
 
 	// More than a screenful, so we only see the last line if we follow
 	for i := 1; i <= 30; i++ {

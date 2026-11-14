@@ -173,20 +173,6 @@ func TestNoFileSwitchingOrSettingMarksFromHelp(t *testing.T) {
 	}
 }
 
-// --follow should apply to all files, not just the first one
-func TestFollowAppliesToAllFiles(t *testing.T) {
-	pager := newFileSwitchingTestPager(t)
-	pager.Follow = true
-	pager.initTargetLines()
-	pager.scrollTowardsTargetLine()
-	assert.Assert(t, pager.isScrolledToEnd())
-
-	pager.nextFile()
-	assert.Assert(t, pager.TargetLine != nil)
-	assert.Equal(t, *pager.TargetLine, linemetadata.IndexMax())
-	assert.Assert(t, pager.isScrolledToEnd())
-}
-
 // Scrolling right first hides the line numbers, so whether they are shown is
 // part of the horizontal scroll position of each file
 func TestSwitchingFilesRemembersLineNumbers(t *testing.T) {

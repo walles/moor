@@ -24,6 +24,8 @@ import (
 	"github.com/walles/twin"
 
 	"github.com/walles/moor/v2/internal"
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/textstyles"
 	"github.com/walles/moor/v2/internal/util"
@@ -375,7 +377,7 @@ func pagerFromArgs(
 	trace := flagSet.Bool("trace", false, "Print trace logs after exiting")
 
 	wrap := flagSet.Bool("wrap", false, "Wrap long lines")
-	follow := flagSet.Bool("follow", false, "Follow the end of every input, just like \"tail -f\"")
+	follow := flagSet.Bool("follow", false, "Follow the end of the input, just like \"tail -f\"")
 	styleOption := flagSetFunc(flagSet,
 		"style", nil,
 		"Highlighting `style` from https://xyproto.github.io/splash/docs/longer/all.html", parseStyleOption)
@@ -631,7 +633,9 @@ func pagerFromArgs(
 	}
 
 	pager.TargetLine = targetLine
-	pager.Follow = *follow
+	if *follow && pager.TargetLine == nil {
+		pager.TargetLine = ptr.To(linemetadata.IndexMax())
+	}
 
 	return pager, screen, style, formatter, logsRequested, nil
 }

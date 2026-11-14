@@ -129,20 +129,15 @@ type Pager struct {
 
 	TabSize int // Number of spaces per tab, default 8, should be positive
 
-	// If non-nil, scroll to this line as soon as possible. IndexMax() means
-	// following the end of the input (tail).
+	// If non-nil, scroll to this line as soon as possible. Set this value to
+	// IndexMax() to follow the end of the input (tail).
 	//
-	// Set before StartPaging(), this applies to the first input only. To follow
-	// all inputs, set Follow instead. While paging, this is about the current
-	// input, the other inputs keep theirs in readerView.targetLine.
+	// This is about the current input, the other inputs keep theirs in
+	// readerView.targetLine.
 	//
 	// NOTE: Always use setTargetLine() to keep the reader in sync with the
 	// pager!
 	TargetLine *linemetadata.Index
-
-	// Follow the end of every input, like "tail -f". For the first input,
-	// TargetLine wins over this.
-	Follow bool
 
 	// If true, pager will clear the screen on return. If false, pager will
 	// clear the last line, and show the cursor.
@@ -596,28 +591,6 @@ func (p *Pager) scrollTowardsTargetLine() {
 	p.setTargetLine(nil)
 }
 
-// Decide where each reader starts out. TargetLine (from +1234) is about the
-// first reader only, while Follow applies to all of them.
-func (p *Pager) initTargetLines() {
-	targetLine := p.TargetLine
-	if p.Follow && targetLine == nil {
-		targetLine = ptr.To(linemetadata.IndexMax())
-	}
-
-	// Make sure the reader knows how many lines we want
-	p.setTargetLine(targetLine)
-
-	if !p.Follow {
-		return
-	}
-	for i := range p.views {
-		if i == p.currentView {
-			continue
-		}
-		p.views[i].targetLine = linemetadata.IndexMax()
-	}
-}
-
 // Except for setting TargetLine, this method also syncs with the reader so that
 // the reader knows how many lines it needs to fetch.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
@@ -695,7 +668,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 	p.screen = screen
 	p.mode = PagerModeViewing{pager: p}
 
-	p.initTargetLines()
+	p.setTargetLine(p.TargetLine)
 
 	if p.InitialSearch != "" {
 		// Trigger the initial search as if the user pressed "/", typed a query and pressed Enter
