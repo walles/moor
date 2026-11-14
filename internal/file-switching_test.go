@@ -222,3 +222,37 @@ func TestSwitchingFilesRemembersLineNumbers(t *testing.T) {
 	pager.nextFile()
 	assert.Assert(t, pager.showLineNumbers)
 }
+
+// Cancelling a prompt while following should take us to the end right away,
+// not when the next line arrives
+func TestCancellingPromptsCatchesUpWithFollowing(t *testing.T) {
+	type keypress struct {
+		key  twin.KeyCode
+		char rune
+	}
+	for name, keys := range map[string][]keypress{
+		"colon then ESC":       {{char: ':'}, {key: twin.KeyEscape}},
+		"colon then q":         {{char: ':'}, {char: 'q'}},
+		"mark jump then ESC":   {{char: '\''}, {key: twin.KeyEscape}},
+		"mark jump then Enter": {{char: '\''}, {key: twin.KeyEnter}},
+		"mark jump not set":    {{char: '\''}, {char: 'y'}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			pager := newFileSwitchingTestPager(t)
+
+			// Following, but no new lines have arrived since we started
+			pager.setTargetLine(ptr.To(linemetadata.IndexMax()))
+			assert.Assert(t, !pager.isScrolledToEnd())
+
+			for _, keypress := range keys {
+				if keypress.char != 0 {
+					pager.mode.onRune(keypress.char)
+				} else {
+					pager.mode.onKey(keypress.key)
+				}
+			}
+
+			assert.Assert(t, pager.isScrolledToEnd())
+		})
+	}
+}
