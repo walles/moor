@@ -200,3 +200,25 @@ func TestTargetLineAppliesToFirstFileOnly(t *testing.T) {
 	pager.nextFile()
 	assert.Assert(t, pager.isScrolledToEnd())
 }
+
+// Scrolling right first hides the line numbers, so whether they are shown is
+// part of the horizontal scroll position of each file
+func TestSwitchingFilesRemembersLineNumbers(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+	pager.ShowLineNumbers = true
+	pager.showLineNumbers = true
+
+	// Hide the line numbers in the first file
+	pager.moveRight(1)
+	assert.Assert(t, !pager.showLineNumbers)
+
+	// The second file should start out with the line numbers the user asked for
+	pager.nextFile()
+	assert.Assert(t, pager.showLineNumbers)
+
+	pager.previousFile()
+	assert.Assert(t, !pager.showLineNumbers)
+
+	pager.nextFile()
+	assert.Assert(t, pager.showLineNumbers)
+}
