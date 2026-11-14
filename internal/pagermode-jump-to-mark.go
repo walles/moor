@@ -67,6 +67,10 @@ func (m PagerModeJumpToMark) onKey(key twin.KeyCode) {
 		p.mode = PagerModeViewing{pager: p}
 		p.mode.onKey(key)
 	}
+
+	// Following paused while the prompt was open, catch up now rather than
+	// when the next line arrives
+	p.handleMoreLinesAvailable()
 }
 
 func (m PagerModeJumpToMark) onRune(char rune) {
@@ -83,6 +87,10 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 	destination, ok := p.bookmarks[char]
 	if !ok {
 		p.mode = &PagerModeInfo{Pager: p, Text: fmt.Sprintf("Mark %c is not set", char)}
+
+		// Following paused while the prompt was open, catch up now rather
+		// than when the next line arrives
+		p.handleMoreLinesAvailable()
 		return
 	}
 
