@@ -82,6 +82,7 @@ func (m PagerModeJumpToMark) onRune(char rune) {
 
 	destination, ok := p.bookmarks[char]
 	if !ok {
+		p.mode = &PagerModeInfo{Pager: p, Text: fmt.Sprintf("Mark %c is not set", char)}
 		return
 	}
 
