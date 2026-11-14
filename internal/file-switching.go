@@ -26,6 +26,9 @@ func (p *Pager) firstFile() {
 func (p *Pager) switchToFile(newIndex int) {
 	newIndex = max(0, min(newIndex, len(p.views)-1))
 	if newIndex == p.currentView {
+		// Following paused while the colon prompt was open, catch up now
+		// rather than when the next line arrives
+		p.scrollTowardsTargetLine()
 		return
 	}
 
