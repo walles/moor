@@ -168,7 +168,8 @@ type Pager struct {
 // What we know about one of our inputs.
 //
 // For the current reader, the live state is in the Pager fields
-// (TargetLine, scrollPosition, leftColumnZeroBased and filter). The fields
+// (TargetLine, scrollPosition, leftColumnZeroBased, showLineNumbers and
+// filter). The fields
 // below are saved when switching away from a reader and restored when
 // switching back, see switchToFile().
 type readerView struct {
@@ -179,9 +180,30 @@ type readerView struct {
 	// IndexMax() means following the end of the input.
 	targetLine *linemetadata.Index
 
-	leftColumnZeroBased int
+	// Nil means not scrolled sideways, with line numbers as the user asked
+	// for them
+	horizontal *horizontalPosition
 
 	filter search.Search
+}
+
+// Where we are sideways. Scrolling right first hides the line numbers, and
+// only then starts moving the columns, so these two belong together.
+type horizontalPosition struct {
+	leftColumnZeroBased int
+	showLineNumbers     bool
+}
+
+func (p *Pager) getHorizontalPosition() horizontalPosition {
+	return horizontalPosition{
+		leftColumnZeroBased: p.leftColumnZeroBased,
+		showLineNumbers:     p.showLineNumbers,
+	}
+}
+
+func (p *Pager) setHorizontalPosition(position horizontalPosition) {
+	p.leftColumnZeroBased = position.leftColumnZeroBased
+	p.showLineNumbers = position.showLineNumbers
 }
 
 // A line in one of our readers

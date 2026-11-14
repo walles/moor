@@ -2,6 +2,8 @@ package internal
 
 import (
 	log "github.com/sirupsen/logrus"
+
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 func (p *Pager) previousFile() {
@@ -33,7 +35,7 @@ func (p *Pager) switchToFile(newIndex int) {
 	if leaving.targetLine == nil {
 		leaving.targetLine = p.lineIndex()
 	}
-	leaving.leftColumnZeroBased = p.leftColumnZeroBased
+	leaving.horizontal = ptr.To(p.getHorizontalPosition())
 	leaving.filter = p.filter
 
 	p.readerLock.Lock()
@@ -43,7 +45,11 @@ func (p *Pager) switchToFile(newIndex int) {
 
 	entering := p.views[newIndex]
 	p.filter = entering.filter
-	p.leftColumnZeroBased = entering.leftColumnZeroBased
+	if entering.horizontal != nil {
+		p.setHorizontalPosition(*entering.horizontal)
+	} else {
+		p.setHorizontalPosition(horizontalPosition{showLineNumbers: p.ShowLineNumbers})
+	}
 	p.scrollPosition = newScrollPosition("Pager file switch")
 	p.setTargetLine(entering.targetLine)
 
