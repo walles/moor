@@ -433,7 +433,7 @@ func TestScrollToBottomWrapNextToLastLine(t *testing.T) {
 	pager.showLineNumbers = false
 	pager.screen = screen
 
-	assert.NilError(t, pager.readers[pager.currentReader].Wait())
+	assert.NilError(t, pager.views[pager.currentView].reader.Wait())
 
 	// This is what we're testing really
 	pager.scrollToEnd()
@@ -768,7 +768,7 @@ func TestFooter(t *testing.T) {
 // Regression test for crash when following an empty file.
 // Before the fix, IndexFromLength(0) would return nil, and calling .IsBefore()
 // on nil would crash.
-func TestHandleMoreLinesAvailableWithEmptyFile(t *testing.T) {
+func TestScrollTowardsTargetLineWithEmptyFile(t *testing.T) {
 	// Create a pager with an empty reader
 	emptyReader := reader.NewFromTextForTesting("empty", "")
 	pager := NewPager(emptyReader)
@@ -777,10 +777,51 @@ func TestHandleMoreLinesAvailableWithEmptyFile(t *testing.T) {
 	pager.TargetLine = ptr.To(linemetadata.IndexMax())
 
 	// This should not crash when lineCount is 0
-	pager.handleMoreLinesAvailable()
+	pager.scrollTowardsTargetLine()
 
 	// Verify target line is still set (we're still waiting for lines)
 	if pager.TargetLine == nil {
 		t.Error("Expected TargetLine to remain set when no lines available")
 	}
+}
+
+// Showing an info message, like "Word wrapping enabled", should not stop us
+// from scrolling to where we were heading.
+func TestScrollTowardsTargetLineWhileShowingInfo(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("line\n", 100))
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(50)))
+	pager.mode = &PagerModeInfo{Pager: pager, Text: "Word wrapping enabled"}
+
+	pager.scrollTowardsTargetLine()
+
+	assert.Assert(t, pager.TargetLine == nil, "Target line should have been reached")
+	assert.Equal(t, pager.lineIndex().Index(), 50)
+}
+
+// Leaving help should restore both the column and whether the line numbers were
+// shown. Otherwise we can end up scrolled right with the line numbers shown.
+func TestLeavingHelpRestoresLineNumbers(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("line\n", 100))
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.showLineNumbers = false
+	pager.leftColumnZeroBased = 16
+
+	pager.mode.onRune('h')
+	assert.Assert(t, pager.isShowingHelp)
+
+	// Scrolling left in help shows the line numbers
+	pager.moveRight(-1)
+	assert.Assert(t, pager.showLineNumbers)
+
+	pager.Quit()
+	assert.Assert(t, !pager.isShowingHelp)
+	assert.Equal(t, pager.leftColumnZeroBased, 16)
+	assert.Assert(t, !pager.showLineNumbers)
 }

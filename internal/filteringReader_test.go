@@ -17,10 +17,10 @@ func TestOneLine(t *testing.T) {
 	pager := Pager{
 		screen: twin.NewFakeScreen(20, 10),
 
-		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "hej")},
+		views: []readerView{{reader: reader.NewFromTextForTesting("test", "hej")}},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -36,10 +36,10 @@ func TestZeroLines(t *testing.T) {
 	pager := Pager{
 		screen: twin.NewFakeScreen(20, 10),
 
-		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "")},
+		views: []readerView{{reader: reader.NewFromTextForTesting("test", "")}},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 

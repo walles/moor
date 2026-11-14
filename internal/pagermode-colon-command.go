@@ -35,6 +35,10 @@ func (m *PagerModeColonCommand) onKey(key twin.KeyCode) {
 		p.mode = PagerModeViewing{pager: p}
 		p.mode.onKey(key)
 	}
+
+	// Following paused while the prompt was open, catch up now rather than
+	// when the next line arrives
+	p.scrollTowardsTargetLine()
 }
 
 func (m *PagerModeColonCommand) onRune(char rune) {
@@ -43,6 +47,11 @@ func (m *PagerModeColonCommand) onRune(char rune) {
 	if char == 'q' {
 		// Back to viewing mode, just like ESC
 		p.mode = PagerModeViewing{pager: p}
+
+		// Following paused while the prompt was open, catch up now rather
+		// than when the next line arrives
+		p.scrollTowardsTargetLine()
+		return
 	}
 
 	if char == 'p' {

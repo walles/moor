@@ -2,19 +2,13 @@ package internal
 
 import (
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/twin"
 	"gotest.tools/v3/assert"
 )
-
-// How long to wait for the pager to get somewhere. Long enough that exceeding it
-// means the pager is stuck rather than slow.
-const pagerTimeout = time.Second
 
 // An event the pager has no handling for.
 //
@@ -22,83 +16,6 @@ const pagerTimeout = time.Second
 // receives it, and the loop reads events after deciding whether to paint. So a
 // completed send means the decision has been made.
 type nudge struct{}
-
-// A screen that can run the pager main loop, and that counts paints.
-//
-// twin.FakeScreen.Events() returns nil, and receiving from a nil channel blocks
-// forever, so the main loop cannot be run with a plain FakeScreen.
-//
-// Show() is what takes over the user's terminal, alternate screen included, so
-// counting Show() calls is counting how much the user gets to see.
-type countingScreen struct {
-	*twin.FakeScreen
-	events chan twin.Event
-	shows  atomic.Int64
-}
-
-func newCountingScreen(width int, height int) *countingScreen {
-	return &countingScreen{
-		FakeScreen: twin.NewFakeScreen(width, height),
-
-		// Unbuffered, so that sending on it is a handshake with the main loop
-		events: make(chan twin.Event),
-	}
-}
-
-func (screen *countingScreen) Events() chan twin.Event {
-	return screen.events
-}
-
-func (screen *countingScreen) Show() {
-	screen.shows.Add(1)
-	screen.FakeScreen.Show()
-}
-
-// Start paging in the background, and stop paging again when the test ends.
-//
-// Returns a channel that is closed once paging is done.
-//
-// Stopping matters even for tests that expect the pager to quit on its own: a
-// pager left running keeps painting on its spinner ticks for as long as the test
-// binary lives.
-func startPagingInBackground(t *testing.T, pager *Pager, screen *countingScreen) chan struct{} {
-	t.Helper()
-	isolateStyles(t)
-
-	pagingDone := make(chan struct{})
-	go func() {
-		pager.StartPaging(screen, colorlessChromaStyle, formatters.TTY16m)
-		close(pagingDone)
-	}()
-
-	t.Cleanup(func() {
-		select {
-		case screen.events <- twin.EventExit{}:
-		case <-pagingDone:
-		}
-
-		<-pagingDone
-	})
-
-	return pagingDone
-}
-
-// Hand an event to the pager, and wait for the pager to take it.
-//
-// Fails the test rather than hanging if the pager is not taking events.
-func handEvent(t *testing.T, screen *countingScreen, pagingDone chan struct{}, event twin.Event) {
-	t.Helper()
-
-	select {
-	case screen.events <- event:
-
-	case <-pagingDone:
-		t.Fatal("Pager quit instead of taking our event")
-
-	case <-time.After(pagerTimeout):
-		t.Fatal("Pager never got as far as reading events")
-	}
-}
 
 // Report whether the pager has painted anything, once it has decided whether to.
 //
@@ -109,7 +26,7 @@ func handEvent(t *testing.T, screen *countingScreen, pagingDone chan struct{}, e
 // something the pager reacts to must ask before handing it over, not after: this
 // answer is read after the pager is free to run on, so a later lap's paint can
 // still land in it.
-func hasPainted(t *testing.T, screen *countingScreen, pagingDone chan struct{}) bool {
+func hasPainted(t *testing.T, screen *pagingLoopScreen, pagingDone chan struct{}) bool {
 	t.Helper()
 
 	handEvent(t, screen, pagingDone, nudge{})
@@ -134,7 +51,7 @@ func TestQuitIfOneScreenPaintsNothingWhileHighlighting(t *testing.T) {
 	// Highlighting pending, like for a source file argument or piped JSON
 	testReader.HighlightingDone.Store(false)
 
-	screen := newCountingScreen(20, 10)
+	screen := newPagingLoopScreen(20, 10)
 
 	pager := NewPager(testReader)
 	pager.QuitIfOneScreen = true
@@ -167,7 +84,7 @@ func TestQuitIfOneScreenPaintsContentsThatDoNotFit(t *testing.T) {
 	testReader.MaybeDone = make(chan bool, 2)
 	testReader.HighlightingDone.Store(false)
 
-	screen := newCountingScreen(20, 10)
+	screen := newPagingLoopScreen(20, 10)
 
 	pager := NewPager(testReader)
 	pager.QuitIfOneScreen = true
@@ -191,7 +108,7 @@ func TestQuitIfOneScreenPaintsForAUserWhoAsks(t *testing.T) {
 	// Highlighting that never finishes, like after a panic while highlighting
 	testReader.HighlightingDone.Store(false)
 
-	screen := newCountingScreen(20, 10)
+	screen := newPagingLoopScreen(20, 10)
 
 	pager := NewPager(testReader)
 	pager.QuitIfOneScreen = true

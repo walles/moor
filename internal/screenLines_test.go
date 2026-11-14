@@ -99,12 +99,12 @@ func TestEmpty(t *testing.T) {
 		screen: twin.NewFakeScreen(99, 10),
 
 		// No lines available
-		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "")},
+		views: []readerView{{reader: reader.NewFromTextForTesting("test", "")}},
 
 		scrollPosition: newScrollPosition("TestEmpty"),
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -185,13 +185,13 @@ func TestOverflowDown(t *testing.T) {
 		),
 
 		// Single line of input
-		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "hej")},
+		views: []readerView{{reader: reader.NewFromTextForTesting("test", "hej")}},
 
 		// This value can be anything and should be clipped, that's what we're testing
 		scrollPosition: *scrollPositionFromIndex("TestOverflowDown", linemetadata.IndexFromOneBased(42)),
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -212,12 +212,12 @@ func TestOverflowUp(t *testing.T) {
 		),
 
 		// Single line of input
-		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "hej")},
+		views: []readerView{{reader: reader.NewFromTextForTesting("test", "hej")}},
 
 		// NOTE: scrollPosition intentionally not initialized
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -286,11 +286,11 @@ func TestOneLineTerminal(t *testing.T) {
 		// Single line terminal window, this is what we're testing
 		screen: twin.NewFakeScreen(20, 1),
 
-		readers:       []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "hej")},
+		views:         []readerView{{reader: reader.NewFromTextForTesting("test", "hej")}},
 		ShowStatusBar: true,
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -307,7 +307,7 @@ func TestShortenedInput(t *testing.T) {
 		screen: twin.NewFakeScreen(20, 10),
 
 		// 1000 lines of input, we will scroll to the bottom
-		readers: []*reader.ReaderImpl{reader.NewFromTextForTesting("test", "first\n"+strings.Repeat("line\n", 1000))},
+		views: []readerView{{reader: reader.NewFromTextForTesting("test", "first\n"+strings.Repeat("line\n", 1000))}},
 
 		scrollPosition: newScrollPosition("TestShortenedInput"),
 		searchHistory:  &SearchHistory{},
@@ -318,7 +318,7 @@ func TestShortenedInput(t *testing.T) {
 	pager.ShowStatusBar = false
 
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -351,13 +351,13 @@ func TestShortenedInputManyLines(t *testing.T) {
 
 	pager := Pager{
 		screen:         twin.NewFakeScreen(20, 10),
-		readers:        []*reader.ReaderImpl{reader.NewFromTextForTesting("test", strings.Join(lines, "\n"))},
+		views:          []readerView{{reader: reader.NewFromTextForTesting("test", strings.Join(lines, "\n"))}},
 		scrollPosition: newScrollPosition("TestShortenedInputManyLines"),
 		searchHistory:  &SearchHistory{},
 	}
 
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -432,11 +432,11 @@ func testRenderLinesWithSearchHits(t *testing.T, input string, expectedBackgroun
 	r := reader.NewFromTextForTesting("test", input)
 	pager := Pager{
 		screen:         twin.NewFakeScreen(10, 3),
-		readers:        []*reader.ReaderImpl{r},
+		views:          []readerView{{reader: r}},
 		scrollPosition: newScrollPosition(scrollPositionName),
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 	pager.search = search.For("xxx")

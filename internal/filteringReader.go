@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"sort"
 	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 	"github.com/walles/moor/v2/internal/reader"
 	"github.com/walles/moor/v2/internal/search"
 )
@@ -159,6 +161,38 @@ func (f *FilteringReader) shouldPassThrough() bool {
 	}
 
 	return false
+}
+
+// Find the index of the line with this unfiltered line number.
+//
+// If the filter hides that line, return the closest shown line above it, and
+// hidden true. If no shown line is at or above it, return nil and hidden true.
+//
+// Without a filter, a line past the end (the file shrank) gives the last line.
+// With no lines at all, return nil.
+func (f *FilteringReader) findLine(number linemetadata.Number) (index *linemetadata.Index, hidden bool) {
+	if f.shouldPassThrough() {
+		lineCount := f.BackingReader.GetLineCount()
+		if lineCount == 0 {
+			return nil, false
+		}
+
+		// The line can be gone if the file got shorter when reloading
+		return ptr.To(linemetadata.IndexFromZeroBased(min(number.AsZeroBased(), lineCount-1))), false
+	}
+
+	allLines := f.getAllLines()
+
+	// Count the lines at or before the one we want
+	count := sort.Search(len(allLines), func(i int) bool {
+		return allLines[i].Number.IsAfter(number)
+	})
+	if count == 0 {
+		return nil, true
+	}
+
+	found := allLines[count-1]
+	return ptr.To(found.Index), found.Number != number
 }
 
 func (f *FilteringReader) GetLineCount() int {

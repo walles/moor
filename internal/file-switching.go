@@ -2,60 +2,71 @@ package internal
 
 import (
 	log "github.com/sirupsen/logrus"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/ptr"
 )
 
 func (p *Pager) previousFile() {
-	p.readerLock.Lock()
-	defer p.readerLock.Unlock()
-
-	newIndex := p.currentReader - 1
-	if newIndex < 0 {
-		newIndex = 0
-	}
-	p.switchToFile(newIndex)
-	log.Tracef("Switched to previous file, index %d", p.currentReader)
-
-	select {
-	case p.readerSwitched <- struct{}{}:
-	default:
-	}
+	p.switchToFile(p.currentView - 1)
 }
 
 func (p *Pager) nextFile() {
-	p.readerLock.Lock()
-	defer p.readerLock.Unlock()
-
-	newIndex := p.currentReader + 1
-	if newIndex >= len(p.readers) {
-		newIndex = len(p.readers) - 1
-	}
-	p.switchToFile(newIndex)
-	log.Tracef("Switched to next file, index %d", p.currentReader)
-
-	select {
-	case p.readerSwitched <- struct{}{}:
-	default:
-	}
+	p.switchToFile(p.currentView + 1)
 }
 
 func (p *Pager) firstFile() {
-	p.readerLock.Lock()
-	defer p.readerLock.Unlock()
-
 	p.switchToFile(0)
-	log.Tracef("Switched to first file, index %d", p.currentReader)
+}
+
+// Save the state of the current reader and restore the state of the new one.
+//
+// Must be called from the main loop goroutine, which is also the only one
+// changing currentView. That's why we can read it without locking.
+func (p *Pager) switchToFile(newIndex int) {
+	newIndex = max(0, min(newIndex, len(p.views)-1))
+	if newIndex == p.currentView {
+		// Following paused while the colon prompt was open, catch up now
+		// rather than when the next line arrives
+		p.scrollTowardsTargetLine()
+		return
+	}
+
+	// Save where we are. If we're on our way somewhere, like when following,
+	// remember that rather than where we happen to be right now.
+	leaving := &p.views[p.currentView]
+	leaving.targetLine = linemetadata.IndexFromZeroBased(0) // For empty files
+	if p.TargetLine != nil {
+		leaving.targetLine = *p.TargetLine
+	} else if index := p.lineIndex(); index != nil {
+		leaving.targetLine = *index
+	}
+	leaving.horizontal = ptr.To(p.getHorizontalPosition())
+	leaving.filter = p.filter
+
+	p.readerLock.Lock()
+	p.currentView = newIndex
+	p.filteringReader.SetBackingReader(p.views[newIndex].reader)
+	p.readerLock.Unlock()
+
+	entering := p.views[newIndex]
+	p.filter = entering.filter
+	if entering.horizontal != nil {
+		p.setHorizontalPosition(*entering.horizontal)
+	} else {
+		p.setHorizontalPosition(horizontalPosition{showLineNumbers: p.ShowLineNumbers})
+	}
+	p.scrollPosition = newScrollPosition("Pager file switch")
+	p.setTargetLine(ptr.To(entering.targetLine))
+
+	// The readerSwitched notification below gets us here too, but not before
+	// the main loop has drawn one frame of the top of the file
+	p.scrollTowardsTargetLine()
+
+	log.Infof("Switched to file index %d", p.currentView)
 
 	select {
 	case p.readerSwitched <- struct{}{}:
 	default:
 	}
-}
-
-func (p *Pager) switchToFile(newIndex int) {
-	if newIndex == p.currentReader {
-		return
-	}
-
-	p.currentReader = newIndex
-	p.scrollPosition = newScrollPosition("Pager file switch")
 }

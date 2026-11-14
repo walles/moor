@@ -19,8 +19,8 @@ const screenHeight = 60
 func testCanonicalize1000(t *testing.T, withStatusBar bool, currentStartLine linemetadata.Index, lastVisibleLine linemetadata.Index) {
 	pager := Pager{
 		screen: twin.NewFakeScreen(100, screenHeight),
-		readers: []*reader.ReaderImpl{
-			reader.NewFromTextForTesting("test", strings.Repeat("a\n", 2000)),
+		views: []readerView{
+			{reader: reader.NewFromTextForTesting("test", strings.Repeat("a\n", 2000))},
 		},
 		ShowLineNumbers: true,
 		showLineNumbers: true,
@@ -35,7 +35,7 @@ func testCanonicalize1000(t *testing.T, withStatusBar bool, currentStartLine lin
 		},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -78,7 +78,7 @@ func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance
 	// Create 1492 lines of single-char content
 	pager := Pager{
 		screen:          twin.NewFakeScreen(80, screenHeight),
-		readers:         []*reader.ReaderImpl{reader.NewFromTextForTesting("test", strings.Repeat("x\n", 1492))},
+		views:           []readerView{{reader: reader.NewFromTextForTesting("test", strings.Repeat("x\n", 1492))}},
 		ShowLineNumbers: true,
 		showLineNumbers: true,
 		scrollPosition: scrollPosition{
@@ -90,7 +90,7 @@ func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance
 		},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.readers[pager.currentReader],
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 

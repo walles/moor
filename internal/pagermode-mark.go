@@ -1,6 +1,12 @@
 package internal
 
-import "github.com/walles/twin"
+import (
+	"fmt"
+
+	"github.com/walles/twin"
+
+	"github.com/walles/moor/v2/internal/linemetadata"
+)
 
 type PagerModeMark struct {
 	pager *Pager
@@ -34,9 +40,35 @@ func (m PagerModeMark) onKey(key twin.KeyCode) {
 		p.mode = PagerModeViewing{pager: p}
 		p.mode.onKey(key)
 	}
+
+	// Following paused while the prompt was open, catch up now rather than
+	// when the next line arrives
+	p.scrollTowardsTargetLine()
 }
 
 func (m PagerModeMark) onRune(char rune) {
-	m.pager.bookmarks[char] = m.pager.scrollPosition
-	m.pager.mode = PagerModeViewing(m)
+	p := m.pager
+
+	lineNumber := linemetadata.NumberFromZeroBased(0)
+	if index := p.lineIndex(); index != nil {
+		if line := p.Reader().GetLine(*index); line != nil {
+			lineNumber = line.Number
+		}
+	}
+
+	newMark := bookmark{view: p.currentView, line: lineNumber}
+	oldMark, existed := p.bookmarks[char]
+	p.bookmarks[char] = newMark
+
+	// Marks are invisible, so confirm what happened. Replacing a mark in
+	// another file is easy to do by mistake.
+	message := fmt.Sprintf("Mark %c set", char)
+	if existed && oldMark != newMark {
+		message = fmt.Sprintf("Mark %c moved", char)
+	}
+	p.mode = &PagerModeInfo{Pager: p, Text: message}
+
+	// Following paused while the prompt was open, catch up now rather than
+	// when the next line arrives
+	p.scrollTowardsTargetLine()
 }
