@@ -21,7 +21,7 @@ func (m PagerModeViewing) drawFooter(filenameText string, statusText string, spi
 	colonHelp := ""
 	m.pager.readerLock.Lock()
 	if len(m.pager.views) > 1 {
-		prefix = fmt.Sprintf("[%d/%d] ", m.pager.currentReader+1, len(m.pager.views))
+		prefix = fmt.Sprintf("[%d/%d] ", m.pager.currentView+1, len(m.pager.views))
 		colonHelp = "':' to switch, "
 	}
 	m.pager.readerLock.Unlock()

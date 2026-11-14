@@ -81,7 +81,7 @@ func TestJumpToMarkInOtherFile(t *testing.T) {
 	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(50), "test")
 
 	jumpToMark(pager, 'x')
-	assert.Equal(t, pager.currentReader, 0)
+	assert.Equal(t, pager.currentView, 0)
 	assert.Equal(t, firstRenderedLine(t, pager), "a100")
 	assert.Assert(t, pager.isViewing())
 
@@ -100,7 +100,7 @@ func TestSettingMarkInOtherFileReplacesIt(t *testing.T) {
 
 	pager.previousFile()
 	jumpToMark(pager, 'x')
-	assert.Equal(t, pager.currentReader, 1)
+	assert.Equal(t, pager.currentView, 1)
 	assert.Equal(t, firstRenderedLine(t, pager), "b50")
 }
 
@@ -172,7 +172,7 @@ func TestJumpToMarkFromHelp(t *testing.T) {
 	jumpToMark(pager, 'x')
 	assert.Assert(t, !pager.isShowingHelp)
 	assert.Assert(t, pager.isViewing())
-	assert.Equal(t, pager.currentReader, 0)
+	assert.Equal(t, pager.currentView, 0)
 	assert.Equal(t, firstRenderedLine(t, pager), "a100")
 
 	// The other file should still be where it was before help

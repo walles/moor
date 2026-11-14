@@ -56,7 +56,7 @@ func (m PagerModeMark) onRune(char rune) {
 		}
 	}
 
-	newMark := bookmark{view: p.currentReader, line: lineNumber}
+	newMark := bookmark{view: p.currentView, line: lineNumber}
 	oldMark, existed := p.bookmarks[char]
 	p.bookmarks[char] = newMark
 

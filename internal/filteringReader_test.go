@@ -20,7 +20,7 @@ func TestOneLine(t *testing.T) {
 		views: []readerView{{reader: reader.NewFromTextForTesting("test", "hej")}},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -39,7 +39,7 @@ func TestZeroLines(t *testing.T) {
 		views: []readerView{{reader: reader.NewFromTextForTesting("test", "")}},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 

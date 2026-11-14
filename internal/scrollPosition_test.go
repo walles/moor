@@ -35,7 +35,7 @@ func testCanonicalize1000(t *testing.T, withStatusBar bool, currentStartLine lin
 		},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -90,7 +90,7 @@ func tryScrollAmount(t *testing.T, scrollFrom linemetadata.Index, scrollDistance
 		},
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 

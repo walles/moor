@@ -104,7 +104,7 @@ func TestEmpty(t *testing.T) {
 		scrollPosition: newScrollPosition("TestEmpty"),
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -191,7 +191,7 @@ func TestOverflowDown(t *testing.T) {
 		scrollPosition: *scrollPositionFromIndex("TestOverflowDown", linemetadata.IndexFromOneBased(42)),
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -217,7 +217,7 @@ func TestOverflowUp(t *testing.T) {
 		// NOTE: scrollPosition intentionally not initialized
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -290,7 +290,7 @@ func TestOneLineTerminal(t *testing.T) {
 		ShowStatusBar: true,
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -318,7 +318,7 @@ func TestShortenedInput(t *testing.T) {
 	pager.ShowStatusBar = false
 
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -357,7 +357,7 @@ func TestShortenedInputManyLines(t *testing.T) {
 	}
 
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 
@@ -436,7 +436,7 @@ func testRenderLinesWithSearchHits(t *testing.T, input string, expectedBackgroun
 		scrollPosition: newScrollPosition(scrollPositionName),
 	}
 	pager.filteringReader = FilteringReader{
-		BackingReader: pager.views[pager.currentReader].reader,
+		BackingReader: pager.views[pager.currentView].reader,
 		Filter:        &pager.filter,
 	}
 	pager.search = search.For("xxx")

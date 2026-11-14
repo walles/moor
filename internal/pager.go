@@ -50,9 +50,9 @@ type eventMaybeDone struct{}
 // Pager is the main on-screen pager
 type Pager struct {
 	// One per input. The number of views is fixed since startup.
-	views         []readerView
-	currentReader int        // Index into the views slice
-	readerLock    sync.Mutex // Protects currentReader and the views' readers
+	views       []readerView
+	currentView int        // Index into the views slice
+	readerLock  sync.Mutex // Protects currentView and the views' readers
 
 	readerSwitched chan struct{}
 
@@ -310,7 +310,7 @@ func NewPager(readers ...*reader.ReaderImpl) *Pager {
 
 	pager := Pager{
 		views:                       views,
-		currentReader:               0,
+		currentView:                 0,
 		readerSwitched:              make(chan struct{}, 1),
 		quit:                        false,
 		ShowLineNumbers:             true, // Constant throghout the lifetime of the pager
@@ -501,7 +501,7 @@ func (p *Pager) ReloadCurrentReader() {
 	p.readerLock.Lock()
 	defer p.readerLock.Unlock()
 
-	current := p.views[p.currentReader].reader
+	current := p.views[p.currentView].reader
 	if !current.ReadingDone.Load() || !current.HighlightingDone.Load() {
 		// The reader's formatting options (like the Style) are fully populated only
 		// once the initial read/highlighting pass consumes them from its channels.
@@ -524,7 +524,7 @@ func (p *Pager) ReloadCurrentReader() {
 	}
 
 	current.Close()
-	p.views[p.currentReader].reader = clone
+	p.views[p.currentView].reader = clone
 	p.filteringReader.SetBackingReader(clone)
 
 	select {
@@ -607,7 +607,7 @@ func (p *Pager) initTargetLines() {
 		return
 	}
 	for i := range p.views {
-		if i == p.currentReader {
+		if i == p.currentView {
 			continue
 		}
 		p.views[i].targetLine = ptr.To(linemetadata.IndexMax())
@@ -618,7 +618,7 @@ func (p *Pager) initTargetLines() {
 // the reader knows how many lines it needs to fetch.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 	p.readerLock.Lock()
-	r := p.views[p.currentReader].reader
+	r := p.views[p.currentView].reader
 	p.readerLock.Unlock()
 
 	log.Trace("Pager: Setting target line to ", targetLine, "...")
@@ -669,7 +669,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 	defer func() {
 		p.readerLock.Lock()
-		r := p.views[p.currentReader].reader
+		r := p.views[p.currentView].reader
 		p.readerLock.Unlock()
 
 		if r.Err != nil {
@@ -714,14 +714,14 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 		// Support throttling of more-lines-available reads, see below
 		p.readerLock.Lock()
-		throttledMoreLines := p.views[p.currentReader].reader.MoreLinesAdded
+		throttledMoreLines := p.views[p.currentView].reader.MoreLinesAdded
 		p.readerLock.Unlock()
 
 		var reenable <-chan time.Time
 
 		for {
 			p.readerLock.Lock()
-			r := p.views[p.currentReader].reader
+			r := p.views[p.currentView].reader
 			p.readerLock.Unlock()
 
 			select {
@@ -729,7 +729,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 				// A different reader is now active. The main loop has already
 				// switched filteringReader over to it, see switchToFile().
 				p.readerLock.Lock()
-				r = p.views[p.currentReader].reader
+				r = p.views[p.currentView].reader
 				p.readerLock.Unlock()
 
 				// Look in the right place for more lines
@@ -796,7 +796,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			// on the way out we never get that far.
 
 			p.readerLock.Lock()
-			r := p.views[p.currentReader].reader
+			r := p.views[p.currentView].reader
 			p.readerLock.Unlock()
 
 			// Read this before looking at the contents, never after: highlighting
