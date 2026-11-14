@@ -188,7 +188,10 @@ func TestJumpToMissingMarkFromHelpStaysInHelp(t *testing.T) {
 	pager.mode.onRune('h')
 	jumpToMark(pager, 'y')
 	assert.Assert(t, pager.isShowingHelp)
-	assert.Assert(t, pager.isViewing())
+
+	info, isInfo := pager.mode.(*PagerModeInfo)
+	assert.Assert(t, isInfo, "Expected an info message, got %T", pager.mode)
+	assert.Equal(t, info.Text, "Mark y is not set")
 }
 
 // With no marks set, the jump prompt offers to set one. Not from help though,
@@ -205,6 +208,32 @@ func TestNoSettingMarksFromHelpJumpPrompt(t *testing.T) {
 
 	pager.mode.onRune('m')
 	assert.Assert(t, pager.isShowingHelp)
-	assert.Assert(t, pager.isViewing())
+	_, isMarking := pager.mode.(PagerModeMark)
+	assert.Assert(t, !isMarking)
 	assert.Equal(t, len(pager.bookmarks), 0)
+}
+
+// Typing a letter that isn't a mark should say so, rather than silently doing
+// nothing
+func TestJumpToMissingMarkSaysSo(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+	pager.scrollPosition = NewScrollPositionFromIndex(linemetadata.IndexFromZeroBased(50), "test")
+
+	jumpToMark(pager, 'y')
+	assert.Equal(t, firstRenderedLine(t, pager), "a50")
+
+	info, isInfo := pager.mode.(*PagerModeInfo)
+	assert.Assert(t, isInfo, "Expected an info message, got %T", pager.mode)
+	assert.Equal(t, info.Text, "Mark y is not set")
+}
+
+// Cancelling the jump prompt is not a mistake, so no message
+func TestCancellingJumpToMarkSaysNothing(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	pager.mode.onRune('\'')
+	pager.mode.onKey(twin.KeyEscape)
+	assert.Assert(t, pager.isViewing())
 }
