@@ -114,13 +114,13 @@ func pickAnEditor() (string, string, error) {
 }
 
 // Returns nil if nothing is being shown.
-func middleVisibleLine(p *Pager) *linemetadata.Index {
+func middleVisibleLine(p *Pager) *linemetadata.Number {
 	lines := p.renderLines().lines
 	if len(lines) == 0 {
 		return nil
 	}
 
-	return ptr.To(lines[len(lines)/2].inputLineIndex)
+	return ptr.To(lines[len(lines)/2].inputLineNumber)
 }
 
 // check if the editor can accept "+LINENUMBER" argument
@@ -219,7 +219,7 @@ func handleEditingRequest(p *Pager) {
 		// the middle of moor's screen to match what the user was actually
 		// looking at.
 		if middleLine := middleVisibleLine(p); middleLine != nil && editorAcceptsPlusLine(commandWithArgs[0]) {
-			lineNumber := middleLine.Index() + 1
+			lineNumber := middleLine.AsOneBased()
 			lineInfo = fmt.Sprintf(" (at line %d)", lineNumber)
 			commandWithArgs = append(commandWithArgs, fmt.Sprintf("+%d", lineNumber))
 		}

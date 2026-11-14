@@ -18,6 +18,10 @@ type renderedLine struct {
 	// position of this line among those.
 	inputLineIndex linemetadata.Index
 
+	// The (one based when displayed) line number of this line in the input.
+	// Differs from inputLineIndex when filtering.
+	inputLineNumber linemetadata.Number
+
 	// If an input line has been wrapped into two, the part on the second line
 	// will have a wrapIndex of 1.
 	wrapIndex linemetadata.ScreenLines
@@ -285,6 +289,7 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 
 		rendered = append(rendered, renderedLine{
 			inputLineIndex:    line.Index,
+			inputLineNumber:   line.Number,
 			wrapIndex:         linemetadata.ScreenLines(wrapIndex),
 			cells:             decorated,
 			containsSearchHit: subLine.ContainsSearchHit,
