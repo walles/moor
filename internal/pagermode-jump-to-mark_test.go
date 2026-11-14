@@ -257,3 +257,36 @@ func TestSettingMarkKeepsFollowing(t *testing.T) {
 	assert.Equal(t, firstRenderedLine(t, pager), "a10")
 	assert.Assert(t, pager.TargetLine == nil)
 }
+
+func assertInfoMessage(t *testing.T, pager *Pager, expected string) {
+	t.Helper()
+
+	info, isInfo := pager.mode.(*PagerModeInfo)
+	assert.Assert(t, isInfo, "Expected an info message, got %T", pager.mode)
+	assert.Equal(t, info.Text, expected)
+}
+
+// Marks are invisible, so confirm that one got set
+func TestSettingMarkSaysSo(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+
+	setMark(pager, 100, 'x')
+	assertInfoMessage(t, pager, "Mark x set")
+
+	// Setting it again in the same place doesn't move it
+	setMark(pager, 100, 'x')
+	assertInfoMessage(t, pager, "Mark x set")
+}
+
+// Replacing a mark, possibly in another file, deserves a heads up
+func TestReplacingMarkSaysSo(t *testing.T) {
+	pager := newTwoFilesMarksTestPager(t)
+	setMark(pager, 100, 'x')
+
+	setMark(pager, 50, 'x')
+	assertInfoMessage(t, pager, "Mark x moved")
+
+	pager.nextFile()
+	setMark(pager, 50, 'x')
+	assertInfoMessage(t, pager, "Mark x moved")
+}
