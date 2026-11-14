@@ -53,8 +53,8 @@ func (p *Pager) switchToFile(newIndex int) {
 	p.scrollPosition = newScrollPosition("Pager file switch")
 	p.setTargetLine(entering.targetLine)
 
-	// Go to the target line now if we can, rather than showing the top of the
-	// file until more lines arrive
+	// The readerSwitched notification below gets us here too, but not before
+	// the main loop has drawn one frame of the top of the file
 	p.scrollTowardsTargetLine()
 
 	log.Tracef("Switched to file index %d", p.currentReader)
