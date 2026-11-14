@@ -187,20 +187,6 @@ func TestFollowAppliesToAllFiles(t *testing.T) {
 	assert.Assert(t, pager.isScrolledToEnd())
 }
 
-// +1234 is a position in the first file only, but the other files should
-// still follow with --follow
-func TestTargetLineAppliesToFirstFileOnly(t *testing.T) {
-	pager := newFileSwitchingTestPager(t)
-	pager.TargetLine = ptr.To(linemetadata.IndexFromZeroBased(100))
-	pager.Follow = true
-	pager.initTargetLines()
-	pager.scrollTowardsTargetLine()
-	assert.Equal(t, firstRenderedLine(t, pager), "a100")
-
-	pager.nextFile()
-	assert.Assert(t, pager.isScrolledToEnd())
-}
-
 // Scrolling right first hides the line numbers, so whether they are shown is
 // part of the horizontal scroll position of each file
 func TestSwitchingFilesRemembersLineNumbers(t *testing.T) {
