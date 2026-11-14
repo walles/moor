@@ -207,6 +207,20 @@ func TestNoSettingMarksFromHelpJumpPrompt(t *testing.T) {
 	assert.Equal(t, len(pager.bookmarks), 0)
 }
 
+// With no marks set, there is nothing to jump to, so keys should work just like
+// when viewing
+func TestJumpPromptWithoutMarksPassesKeysOn(t *testing.T) {
+	pager := newFileSwitchingTestPager(t)
+
+	pager.mode.onRune('h')
+	pager.mode.onRune('\'')
+	pager.mode.onRune('f')
+
+	assert.Assert(t, pager.isShowingHelp)
+	assert.Assert(t, pager.isViewing(), "Expected viewing, got %T", pager.mode)
+	assert.Assert(t, pager.lineIndex().Index() > 0, "Expected 'f' to scroll down")
+}
+
 // Typing a letter that isn't a mark should say so, rather than silently doing
 // nothing
 func TestJumpToMissingMarkSaysSo(t *testing.T) {
