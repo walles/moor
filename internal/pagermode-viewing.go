@@ -205,9 +205,6 @@ func (m PagerModeViewing) onRune(char rune) {
 		}
 
 		if len(p.views) > 1 {
-			// Don't touch TargetLine here. Following pauses anyway while not
-			// viewing, and if the user switches files we want to remember
-			// whether they were following.
 			p.mode = &PagerModeColonCommand{pager: p}
 		} else {
 			p.mode = &PagerModeInfo{Pager: p, Text: "Pass more files on the command line to be able to switch between them."}
@@ -226,18 +223,11 @@ func (m PagerModeViewing) onRune(char rune) {
 			// Marks point into files, not into the help text
 			break
 		}
-		// Don't touch TargetLine here. Setting a mark doesn't move the view,
-		// so it shouldn't stop following. Following pauses anyway while not
-		// viewing, so we mark the line that was at the top when 'm' was
-		// pressed.
 		p.mode = PagerModeMark{pager: p}
 
 	case '\'':
 		// This works from help as well, jumping to a mark leaves help. See
 		// PagerModeJumpToMark.onRune().
-		//
-		// Don't touch TargetLine here. Following pauses anyway while not
-		// viewing, and the user might not jump anywhere.
 		p.mode = PagerModeJumpToMark{pager: p}
 
 	case 'w':
