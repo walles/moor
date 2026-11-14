@@ -75,6 +75,7 @@ func (m PagerModeJumpToMark) onKey(key twin.KeyCode) {
 
 func (m PagerModeJumpToMark) onRune(char rune) {
 	if len(m.pager.bookmarks) == 0 && char == 'm' && !m.pager.isShowingHelp {
+		// The prompt told the user to press 'm' to set a mark, see getMarkPrompt()
 		m.pager.mode = PagerModeMark(m)
 		return
 	}
