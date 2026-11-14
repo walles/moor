@@ -54,6 +54,8 @@ type Pager struct {
 	currentView int        // Index into the views slice
 	readerLock  sync.Mutex // Protects currentView and the views' readers
 
+	// The current reader has changed. Send without blocking, one waiting
+	// notification is enough.
 	readerSwitched chan struct{}
 
 	// A view of the current reader, possibly filtered

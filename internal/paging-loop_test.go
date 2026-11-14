@@ -15,8 +15,7 @@ import (
 	"github.com/walles/moor/v2/internal/reader"
 )
 
-// Following must keep working in an input we switched to, which needs the
-// background goroutine to start listening to the new input's lines.
+// Following must keep working in an input we switched to
 func TestFollowingWorksAfterSwitchingFiles(t *testing.T) {
 	a := reader.NewFromTextForTesting("a", linesForTesting("a", 300))
 	assert.NilError(t, a.Wait())
