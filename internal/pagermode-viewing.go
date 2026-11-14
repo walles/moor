@@ -226,8 +226,11 @@ func (m PagerModeViewing) onRune(char rune) {
 			// Marks point into files, not into the help text
 			break
 		}
+		// Don't touch TargetLine here. Setting a mark doesn't move the view,
+		// so it shouldn't stop following. Following pauses anyway while not
+		// viewing, so we mark the line that was at the top when 'm' was
+		// pressed.
 		p.mode = PagerModeMark{pager: p}
-		p.setTargetLine(nil)
 
 	case '\'':
 		// This works from help as well, jumping to a mark leaves help. See

@@ -38,6 +38,10 @@ func (m PagerModeMark) onKey(key twin.KeyCode) {
 		p.mode = PagerModeViewing{pager: p}
 		p.mode.onKey(key)
 	}
+
+	// Following paused while the prompt was open, catch up now rather than
+	// when the next line arrives
+	p.handleMoreLinesAvailable()
 }
 
 func (m PagerModeMark) onRune(char rune) {
@@ -52,4 +56,8 @@ func (m PagerModeMark) onRune(char rune) {
 
 	p.bookmarks[char] = bookmark{view: p.currentReader, line: lineNumber}
 	p.mode = PagerModeViewing(m)
+
+	// Following paused while the prompt was open, catch up now rather than
+	// when the next line arrives
+	p.handleMoreLinesAvailable()
 }
