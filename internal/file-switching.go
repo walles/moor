@@ -3,6 +3,7 @@ package internal
 import (
 	log "github.com/sirupsen/logrus"
 
+	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/ptr"
 )
 
@@ -31,9 +32,11 @@ func (p *Pager) switchToFile(newIndex int) {
 	// Save where we are. If we're on our way somewhere, like when following,
 	// remember that rather than where we happen to be right now.
 	leaving := &p.views[p.currentView]
-	leaving.targetLine = p.TargetLine
-	if leaving.targetLine == nil {
-		leaving.targetLine = p.lineIndex()
+	leaving.targetLine = linemetadata.IndexFromZeroBased(0) // For empty files
+	if p.TargetLine != nil {
+		leaving.targetLine = *p.TargetLine
+	} else if index := p.lineIndex(); index != nil {
+		leaving.targetLine = *index
 	}
 	leaving.horizontal = ptr.To(p.getHorizontalPosition())
 	leaving.filter = p.filter
@@ -51,7 +54,7 @@ func (p *Pager) switchToFile(newIndex int) {
 		p.setHorizontalPosition(horizontalPosition{showLineNumbers: p.ShowLineNumbers})
 	}
 	p.scrollPosition = newScrollPosition("Pager file switch")
-	p.setTargetLine(entering.targetLine)
+	p.setTargetLine(ptr.To(entering.targetLine))
 
 	// The readerSwitched notification below gets us here too, but not before
 	// the main loop has drawn one frame of the top of the file

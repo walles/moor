@@ -176,9 +176,9 @@ type readerView struct {
 	// Replaced when reloading, see ReloadCurrentReader()
 	reader *reader.ReaderImpl
 
-	// Where to go when switching back to this reader. Nil means the top,
-	// IndexMax() means following the end of the input.
-	targetLine *linemetadata.Index
+	// Where to go when switching back to this reader. IndexMax() means
+	// following the end of the input.
+	targetLine linemetadata.Index
 
 	// Nil means not scrolled sideways, with line numbers as the user asked
 	// for them
@@ -610,7 +610,7 @@ func (p *Pager) initTargetLines() {
 		if i == p.currentView {
 			continue
 		}
-		p.views[i].targetLine = ptr.To(linemetadata.IndexMax())
+		p.views[i].targetLine = linemetadata.IndexMax()
 	}
 }
 
