@@ -57,7 +57,7 @@ func (p *Pager) switchToFile(newIndex int) {
 	// the main loop has drawn one frame of the top of the file
 	p.scrollTowardsTargetLine()
 
-	log.Tracef("Switched to file index %d", p.currentReader)
+	log.Infof("Switched to file index %d", p.currentReader)
 
 	select {
 	case p.readerSwitched <- struct{}{}:
