@@ -18,6 +18,12 @@ import (
 // goroutine) starts, so there's no data race with tailFile()'s reads of it.
 func TestMain(m *testing.M) {
 	tailPollInterval = 10 * time.Millisecond
+	sameFile = func(oldStat, newStat os.FileInfo) bool {
+		if _, isFake := oldStat.(fakeFileInfo); isFake {
+			return true
+		}
+		return os.SameFile(oldStat, newStat)
+	}
 	os.Exit(m.Run())
 }
 
