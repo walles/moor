@@ -825,3 +825,22 @@ func TestLeavingHelpRestoresLineNumbers(t *testing.T) {
 	assert.Equal(t, pager.leftColumnZeroBased, 16)
 	assert.Assert(t, !pager.showLineNumbers)
 }
+
+// Scrolling left at the left edge brings back the line numbers, but only for
+// users who want line numbers in the first place.
+func TestScrollLeftRespectsNoLineNumbers(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", "line\n")
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+
+	pager.moveRight(-1)
+	assert.Assert(t, !pager.showLineNumbers)
+
+	pager.ShowLineNumbers = true
+	pager.moveRight(-1)
+	assert.Assert(t, pager.showLineNumbers)
+}
