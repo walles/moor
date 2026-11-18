@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"time"
 
@@ -25,7 +26,34 @@ const (
 	tailActionAppend                     // File was appended to, read the new contents
 )
 
-// reloadFromFile clears the current content and re-reads the file from scratch.
+// lineLimiter passes on the first linesLeft lines of base. Whatever it read
+// past those ends up in rest.
+type lineLimiter struct {
+	base      io.Reader
+	linesLeft int
+	rest      []byte
+}
+
+func (l *lineLimiter) Read(p []byte) (int, error) {
+	if l.linesLeft <= 0 {
+		return 0, io.EOF
+	}
+
+	n, err := l.base.Read(p)
+	for i := range n {
+		if p[i] != '\n' {
+			continue
+		}
+		l.linesLeft--
+		if l.linesLeft == 0 {
+			l.rest = append([]byte(nil), p[i+1:n]...)
+			return i + 1, io.EOF
+		}
+	}
+	return n, err
+}
+
+// reloadFromFile replaces the current content with the file re-read from scratch.
 //
 // FIXME: This must only be called from the tailing goroutine. If called
 // concurrently with consumeLinesFromStream(), both goroutines will interleave
@@ -46,12 +74,20 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 		log.Debugf("Failed to stat file %s immediately after opening for reload: %s", fileName, statErr.Error())
 	}
 
+	// Read the first lines aside and swap them in at once. If the pager redraws
+	// while we have no lines or too few, it loses its scroll position.
+	reader.RLock()
+	head := &lineLimiter{base: stream, linesLeft: reader.pauseAfterLines}
+	reader.RUnlock()
+	scratch := &ReaderImpl{FileName: reader.FileName, pauseAfterLines: math.MaxInt}
+	scratch.consumeLinesFromStream(head)
+
 	reader.Lock()
-	reader.lines = reader.lines[:0]
-	reader.bytesCount = 0
-	reader.headerBytes = nil
-	reader.endsWithNewline = false
-	reader.Err = nil
+	reader.lines = scratch.lines
+	reader.bytesCount = scratch.bytesCount
+	reader.headerBytes = scratch.headerBytes
+	reader.endsWithNewline = scratch.endsWithNewline
+	reader.Err = scratch.Err
 	if newStat != nil {
 		reader.lastStat = newStat
 	}
@@ -59,13 +95,16 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	reader.HighlightingDone.Store(false)
 	reader.Unlock()
 
-	// Signal the pager to redraw the now-empty content
 	select {
 	case reader.MoreLinesAdded <- true:
 	default:
 	}
 
-	reader.consumeLinesFromStream(stream)
+	// The rest is subject to pausing, just like on the initial read
+	reader.Lock()
+	reader.assumeLockAndMaybePause()
+	reader.Unlock()
+	reader.consumeLinesFromStream(io.MultiReader(bytes.NewReader(head.rest), stream))
 	err = stream.Close()
 	if err != nil {
 		return fmt.Errorf("failed to close file %s after reloading: %w", fileName, err)
