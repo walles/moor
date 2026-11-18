@@ -277,3 +277,31 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 
 	assert.Equal(t, action, tailActionContinue)
 }
+
+// A file that another file was moved into place over must be reloaded, also
+// when it looks like the old file with more data at the end.
+func TestDetermineTailAction_replacedByLargerFile(t *testing.T) {
+	fileName := filepath.Join(t.TempDir(), "test.txt")
+	err := os.WriteFile(fileName, []byte("old\n"), 0600)
+	assert.NilError(t, err)
+	oldStat, err := os.Stat(fileName)
+	assert.NilError(t, err)
+
+	err = os.WriteFile(fileName+".new", []byte("old\nnew\n"), 0600)
+	assert.NilError(t, err)
+	err = os.Rename(fileName+".new", fileName)
+	assert.NilError(t, err)
+	newStat, err := os.Stat(fileName)
+	assert.NilError(t, err)
+
+	action := determineTailAction(
+		fileName,
+		false, // isCompressed
+		oldStat,
+		newStat,
+		nil, // statErr
+		[]byte("old\n"),
+	)
+
+	assert.Equal(t, action, tailActionReload)
+}
