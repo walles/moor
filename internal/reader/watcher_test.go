@@ -301,3 +301,21 @@ func TestReadRewrittenFile_NeverPartial(t *testing.T) {
 		assert.Assert(t, time.Now().Before(deadline), "timed out waiting for the reload")
 	}
 }
+
+// A reload must stop at the pause limit, just like the initial read.
+func TestReadRewrittenFile_Pauses(t *testing.T) {
+	testMe, file := setupWatcherTest(t, "one\n")
+	testMe.SetPauseAfterLines(2)
+
+	err := os.WriteFile(file.Name()+".new", []byte("a\nb\nc\nd\n"), 0600)
+	assert.NilError(t, err)
+	err = os.Rename(file.Name()+".new", file.Name())
+	assert.NilError(t, err)
+
+	waitForCondition(t, testMe.PauseStatus.Load, "waiting for the reload to pause")
+	assertLines(t, testMe, "a", "b")
+
+	testMe.SetPauseAfterLines(99)
+	waitForLineCount(t, testMe, 4)
+	assertLines(t, testMe, "a", "b", "c", "d")
+}
