@@ -965,3 +965,22 @@ func TestTargetLineInHelpWhileFileIsLoading(t *testing.T) {
 
 	assert.Assert(t, pager.TargetLine == nil, "The help text is all there, the target has been reached")
 }
+
+// Scrolling right should stop when the end of the longest line reaches the
+// right edge of the screen, rather than scrolling the text out of view.
+func TestScrollRightStopsAtEndOfLongestLine(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("x", 30)+"\nshort\n")
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+
+	for range 3 {
+		pager.redraw("")
+		pager.moveRight(pager.SideScrollAmount)
+	}
+
+	assert.Equal(t, pager.leftColumnZeroBased, 10)
+}
