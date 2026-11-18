@@ -472,7 +472,8 @@ func (p *Pager) moveRight(delta int) {
 	}
 
 	if p.leftColumnZeroBased == 0 && delta < 0 {
-		p.showLineNumbers = true
+		// Bring back the line numbers if the user wants them
+		p.showLineNumbers = p.ShowLineNumbers
 		return
 	}
 
