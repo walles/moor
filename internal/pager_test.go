@@ -810,6 +810,7 @@ func TestLeavingHelpRestoresLineNumbers(t *testing.T) {
 
 	pager := NewPager(r)
 	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = true
 	pager.showLineNumbers = false
 	pager.leftColumnZeroBased = 16
 
