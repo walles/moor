@@ -3,6 +3,7 @@ package reader
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -276,4 +277,27 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 	)
 
 	assert.Equal(t, action, tailActionContinue)
+}
+
+// A rewritten file must be swapped in at once: a pager that redraws during the
+// reload must never see an empty or partial file, or it loses its scroll
+// position.
+func TestReadRewrittenFile_NeverPartial(t *testing.T) {
+	const lineCount = 20000
+	testMe, file := setupWatcherTest(t, strings.Repeat("old\n", lineCount))
+
+	err := os.WriteFile(file.Name()+".new", []byte(strings.Repeat("new\n", lineCount+1)), 0600)
+	assert.NilError(t, err)
+	err = os.Rename(file.Name()+".new", file.Name())
+	assert.NilError(t, err)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		count := testMe.GetLineCount()
+		if count == lineCount+1 {
+			break
+		}
+		assert.Assert(t, count >= lineCount, "saw %d lines during the reload", count)
+		assert.Assert(t, time.Now().Before(deadline), "timed out waiting for the reload")
+	}
 }
