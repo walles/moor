@@ -62,7 +62,7 @@ func (p *Pager) redraw(spinner string) {
 func (p *Pager) renderIntoCells(spinner string) int {
 	log.Trace("renderIntoCells called")
 	p.screen.Clear()
-	p.longestLineLength = 0
+	p.overflowRight = 0
 
 	lastUpdatedScreenLineNumber := -1
 	renderedScreen := p.renderLines()
@@ -150,25 +150,6 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 	for _, line := range inputLines.Lines {
 		rendering := p.renderLine(line, numberPrefixLength, highlightSearchHitLines)
 
-		var onScreenLength int
-		for i := range rendering {
-			trimmedLen := len(rendering[i].cells.WithoutSpaceRight())
-			if trimmedLen > onScreenLength {
-				onScreenLength = trimmedLen
-			}
-		}
-
-		// We're trying to find the max length of readable characters to limit
-		// the scrolling to right, so we don't go over into the vast emptiness for no reason.
-		//
-		// The -1 fixed an issue that seemed like an off-by-one where sometimes, when first
-		// scrolling completely to the right, the first left scroll did not show the text again.
-		displayLength := p.leftColumnZeroBased + onScreenLength - 1
-
-		if displayLength >= p.longestLineLength {
-			p.longestLineLength = displayLength
-		}
-
 		allLines = append(allLines, rendering...)
 	}
 
@@ -250,11 +231,12 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 	} else {
 		// Request only screen width tokens plus whatever is needed on the left
 		// due to horizontal scrolling. Also, get one extra to the right so we
-		// can know whether to show overflow markers.
+		// can know whether to show overflow markers, and one sideways scroll
+		// step more so we know how far right there is anything to scroll to.
 		//
 		// This is a huge performance gain when dealing with files with
 		// extremeny long lines: https://github.com/walles/moor/issues/358
-		highlighted = line.HighlightedTokens(theme.plainText, theme.searchHit, p.search, width+p.leftColumnZeroBased+1)
+		highlighted = line.HighlightedTokens(theme.plainText, theme.searchHit, p.search, width+p.leftColumnZeroBased+1+p.SideScrollAmount)
 
 		// All on one line
 		wrapped = []textstyles.StyledRunesWithTrailer{{
@@ -319,6 +301,12 @@ func (p *Pager) decorateLine(lineNumberToShow *linemetadata.Number, numberPrefix
 	}
 	newLine := make([]textstyles.CellWithMetadata, 0, width)
 	newLine = append(newLine, createLinePrefix(lineNumberToShow, numberPrefixLength)...)
+
+	contentsWidth := numberPrefixLength
+	for _, char := range contents {
+		contentsWidth += char.Width()
+	}
+	p.overflowRight = max(p.overflowRight, contentsWidth-p.leftColumnZeroBased-width)
 
 	// Find the first and last fully visible runes.
 	var firstVisibleRuneIndex *int

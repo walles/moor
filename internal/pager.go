@@ -155,9 +155,10 @@ type Pager struct {
 	// actual hits)
 	WithSearchHitLineBackground bool
 
-	// Length of the longest line displayed. This is used for limiting scrolling
-	// to the right.
-	longestLineLength int
+	// How many columns the longest displayed line extends past the right edge
+	// of the screen, at most SideScrollAmount. This is used for limiting
+	// scrolling to the right.
+	overflowRight int
 
 	// Bookmarks that you can come back to. Shared between all readers, so
 	// jumping to a mark can take you to another reader.
@@ -476,17 +477,17 @@ func (p *Pager) moveRight(delta int) {
 		return
 	}
 
+	// Stop when the end of the longest line reaches the right edge
+	if delta > p.overflowRight {
+		delta = max(p.overflowRight, 0)
+	}
+	p.overflowRight -= delta
+
 	result := p.leftColumnZeroBased + delta
 	if result < 0 {
 		p.leftColumnZeroBased = 0
 	} else {
 		p.leftColumnZeroBased = result
-	}
-
-	// If we try to move past the characters when moving right, stop scrolling to
-	// avoid moving infinitely into the void.
-	if p.leftColumnZeroBased > p.longestLineLength {
-		p.leftColumnZeroBased = p.longestLineLength
 	}
 }
 
