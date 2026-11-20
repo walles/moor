@@ -17,6 +17,9 @@ import (
 // tests to make them run faster.
 var tailPollInterval = time.Second
 
+// Overridden in tests, os.SameFile() only works on what os.Stat() returned.
+var sameFile = os.SameFile
+
 type tailAction int
 
 const (
@@ -248,6 +251,13 @@ func determineTailAction(
 	if oldStat == nil {
 		log.Debugf("Previous stat unknown for %s, stop tailing", fileName)
 		return tailActionStop
+	}
+
+	if !sameFile(oldStat, newStat) {
+		// Another file was moved into place. Even if it starts with the same
+		// bytes as the old one, it is not an append.
+		log.Debugf("File %s was replaced, reloading", fileName)
+		return tailActionReload
 	}
 
 	oldSize := oldStat.Size()
