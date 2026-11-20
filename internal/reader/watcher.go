@@ -10,6 +10,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 )
 
 // How often tailFile() checks the tailed file for changes. Overridden in
@@ -29,7 +30,9 @@ const (
 //
 // FIXME: This must only be called from the tailing goroutine. If called
 // concurrently with consumeLinesFromStream(), both goroutines will interleave
-// line additions and the byte count will be wrong. Fix this before adding any
+// line additions and the read summary will be wrong. Also,
+// determineTailAction() reads the summary one getter at a time, and relies on
+// nobody adding to it in between. Fix this before adding any
 // other callers (e.g. the 'r' key).
 func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	log.Debugf("Reloading file %s from the beginning", fileName)
@@ -141,9 +144,10 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 }
 
 // fileShouldBeReloaded checks if the file's current starting bytes still match the
-// headerBytes we have recorded so far. Returns true if they differ (file was
+// header we have recorded so far. Returns true if they differ (file was
 // rewritten) or if we are unsure due to errors.
-func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
+func fileShouldBeReloaded(fileName string, readSoFar *readsummary.Summary) bool {
+	headerBytes := readSoFar.Header()
 	if len(headerBytes) == 0 {
 		// We have no baseline to compare against (e.g., initially empty file).
 		//
@@ -184,13 +188,15 @@ func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
 	return true
 }
 
-// trailerMoved checks if the trailerBytes we read last are still where we read
-// them, just before bytesCount. Returns true if they aren't (file was replaced
-// by one starting out the same) or if we are unsure due to errors.
+// trailerMoved checks if the trailer we read last is still where we read it,
+// just before the byte count. Returns true if it isn't (file was replaced by one
+// starting out the same) or if we are unsure due to errors.
 //
-// Must not be called for compressed files, bytesCount is not a file offset for
-// those.
-func trailerMoved(fileName string, bytesCount int64, trailerBytes []byte) bool {
+// Must not be called for compressed files, the byte count is not a file offset
+// for those.
+func trailerMoved(fileName string, readSoFar *readsummary.Summary) bool {
+	bytesCount := readSoFar.Count()
+	trailerBytes := readSoFar.Trailer()
 	if len(trailerBytes) == 0 {
 		// Nothing read so far, so anything is an append
 		return false
@@ -227,9 +233,7 @@ func determineTailAction(
 	oldStat os.FileInfo,
 	newStat os.FileInfo,
 	statErr error,
-	bytesCount int64,
-	headerBytes []byte,
-	trailerBytes []byte,
+	readSoFar *readsummary.Summary,
 ) tailAction {
 	if statErr != nil {
 		log.Debugf("Failed to stat file %s while tailing, giving up: %s", fileName, statErr.Error())
@@ -255,12 +259,12 @@ func determineTailAction(
 			return tailActionReload
 		}
 
-		if fileShouldBeReloaded(fileName, headerBytes) {
+		if fileShouldBeReloaded(fileName, readSoFar) {
 			log.Debugf("File %s boundary bytes changed (likely rewritten) while growing, reloading", fileName)
 			return tailActionReload
 		}
 
-		if trailerMoved(fileName, bytesCount, trailerBytes) {
+		if trailerMoved(fileName, readSoFar) {
 			log.Debugf("File %s trailing bytes changed (likely replaced) while growing, reloading", fileName)
 			return tailActionReload
 		}
@@ -276,7 +280,7 @@ func determineTailAction(
 		return tailActionReload
 	}
 
-	if fileShouldBeReloaded(fileName, headerBytes) {
+	if fileShouldBeReloaded(fileName, readSoFar) {
 		log.Debugf("File %s changed, reloading", fileName)
 		return tailActionReload
 	}
@@ -294,9 +298,6 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	reader.RLock()
 	fileName := reader.FileName
 	isCompressed := reader.IsCompressed
-	bytesCount := reader.readSoFar.Count()
-	headerBytes := reader.readSoFar.Header()
-	trailerBytes := reader.readSoFar.Trailer()
 	oldStat := reader.lastStat
 	reader.RUnlock()
 
@@ -305,7 +306,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	}
 
 	newStat, statErr := os.Stat(*fileName)
-	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, bytesCount, headerBytes, trailerBytes)
+	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, &reader.readSoFar)
 
 	switch action {
 	case tailActionStop:
@@ -320,7 +321,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 		}
 		return true, nil
 	case tailActionAppend:
-		return reader.readNewBytes(*fileName, bytesCount)
+		return reader.readNewBytes(*fileName, reader.readSoFar.Count())
 	default:
 		return false, nil
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 	"gotest.tools/v3/assert"
 )
 
@@ -308,9 +309,7 @@ func TestDetermineTailAction(t *testing.T) {
 				oldStat,
 				fakeFileInfo{size: tt.newSize, modTime: tt.newModTime},
 				tt.statErr,
-				0,   // bytesCount
-				nil, // headerBytes
-				nil, // trailerBytes
+				&readsummary.Summary{},
 			)
 			assert.Equal(t, actual, tt.expected)
 		})
@@ -335,9 +334,7 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		nil, // statErr
-		testMe.readSoFar.Count(),
-		testMe.readSoFar.Header(),
-		testMe.readSoFar.Trailer(),
+		&testMe.readSoFar,
 	)
 
 	assert.Equal(t, action, tailActionContinue)
