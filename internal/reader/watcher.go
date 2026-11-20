@@ -29,7 +29,7 @@ const (
 //
 // FIXME: This must only be called from the tailing goroutine. If called
 // concurrently with consumeLinesFromStream(), both goroutines will interleave
-// line additions and bytesCount will be wrong. Fix this before adding any
+// line additions and the byte count will be wrong. Fix this before adding any
 // other callers (e.g. the 'r' key).
 func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	log.Debugf("Reloading file %s from the beginning", fileName)
@@ -48,9 +48,7 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 
 	reader.Lock()
 	reader.lines = reader.lines[:0]
-	reader.bytesCount = 0
-	reader.headerBytes = nil
-	reader.endsWithNewline = false
+	reader.readSoFar.Reset()
 	reader.Err = nil
 	if newStat != nil {
 		reader.lastStat = newStat
@@ -143,7 +141,7 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 }
 
 // fileShouldBeReloaded checks if the file's current starting bytes still match the
-// headerBytes we recorded originally. Returns true if they differ (file was
+// headerBytes we have recorded so far. Returns true if they differ (file was
 // rewritten) or if we are unsure due to errors.
 func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
 	if len(headerBytes) == 0 {
@@ -252,8 +250,8 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	reader.RLock()
 	fileName := reader.FileName
 	isCompressed := reader.IsCompressed
-	bytesCount := reader.bytesCount
-	headerBytes := reader.headerBytes
+	bytesCount := reader.readSoFar.Count()
+	headerBytes := reader.readSoFar.Header()
 	oldStat := reader.lastStat
 	reader.RUnlock()
 

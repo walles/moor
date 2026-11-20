@@ -15,6 +15,7 @@ import (
 
 	"github.com/walles/moor/v2/internal/linemetadata"
 	"github.com/walles/moor/v2/internal/ptr"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 	"github.com/walles/moor/v2/internal/util"
 
 	"github.com/alecthomas/chroma/v2"
@@ -101,18 +102,8 @@ type ReaderImpl struct {
 	// True if the file we read from was compressed.
 	IsCompressed bool
 
-	// How many bytes have we successfully decoded and read into memory so far?
-	//
-	// Note: For compressed files, this is the DECOMPRESSED byte count. Do NOT
-	// compare this directly to os.FileInfo.Size() (which is the compressed size
-	// on disk), as they represent different metrics.
-	bytesCount int64
-
-	// The first bytes read from the file. Used to determine if the file was replaced
-	// or appended to when it grows.
-	headerBytes []byte
-
-	endsWithNewline bool
+	// What we know about the bytes read so far
+	readSoFar readsummary.Summary
 
 	Err error
 
