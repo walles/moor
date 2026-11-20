@@ -184,13 +184,52 @@ func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
 	return true
 }
 
+// trailerMoved checks if the trailerBytes we read last are still where we read
+// them, just before bytesCount. Returns true if they aren't (file was replaced
+// by one starting out the same) or if we are unsure due to errors.
+//
+// Must not be called for compressed files, bytesCount is not a file offset for
+// those.
+func trailerMoved(fileName string, bytesCount int64, trailerBytes []byte) bool {
+	if len(trailerBytes) == 0 {
+		// Nothing read so far, so anything is an append
+		return false
+	}
+
+	file, err := os.Open(fileName)
+	if err != nil {
+		// Stat() succeeded just microseconds ago. If we can't open it now, the
+		// file was likely deleted, rotated, or permissions changed. Safest to
+		// reload.
+		return true
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debugf("Failed to close file %s after checking trailing bytes: %s", fileName, closeErr.Error())
+		}
+	}()
+
+	checkBuf := make([]byte, len(trailerBytes))
+	trailerOffset := bytesCount - int64(len(trailerBytes))
+	_, err = file.ReadAt(checkBuf, trailerOffset)
+	if err != nil {
+		// The file just grew past bytesCount, so this read should have
+		// succeeded. Reloading is the safe bet.
+		return true
+	}
+
+	return !bytes.Equal(checkBuf, trailerBytes)
+}
+
 func determineTailAction(
 	fileName string,
 	isCompressed bool,
 	oldStat os.FileInfo,
 	newStat os.FileInfo,
 	statErr error,
+	bytesCount int64,
 	headerBytes []byte,
+	trailerBytes []byte,
 ) tailAction {
 	if statErr != nil {
 		log.Debugf("Failed to stat file %s while tailing, giving up: %s", fileName, statErr.Error())
@@ -218,6 +257,11 @@ func determineTailAction(
 
 		if fileShouldBeReloaded(fileName, headerBytes) {
 			log.Debugf("File %s boundary bytes changed (likely rewritten) while growing, reloading", fileName)
+			return tailActionReload
+		}
+
+		if trailerMoved(fileName, bytesCount, trailerBytes) {
+			log.Debugf("File %s trailing bytes changed (likely replaced) while growing, reloading", fileName)
 			return tailActionReload
 		}
 
@@ -252,6 +296,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	isCompressed := reader.IsCompressed
 	bytesCount := reader.readSoFar.Count()
 	headerBytes := reader.readSoFar.Header()
+	trailerBytes := reader.readSoFar.Trailer()
 	oldStat := reader.lastStat
 	reader.RUnlock()
 
@@ -260,7 +305,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	}
 
 	newStat, statErr := os.Stat(*fileName)
-	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, headerBytes)
+	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, bytesCount, headerBytes, trailerBytes)
 
 	switch action {
 	case tailActionStop:

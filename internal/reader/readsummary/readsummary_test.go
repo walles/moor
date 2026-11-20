@@ -12,6 +12,7 @@ func TestEmpty(t *testing.T) {
 
 	assert.Equal(t, s.Count(), int64(0))
 	assert.Equal(t, len(s.Header()), 0)
+	assert.Equal(t, len(s.Trailer()), 0)
 	assert.Equal(t, s.EndedWithNewline(), false)
 }
 
@@ -26,6 +27,7 @@ func TestAdd(t *testing.T) {
 	s.Add([]byte("World"))
 	assert.Equal(t, s.Count(), int64(11))
 	assert.Equal(t, string(s.Header()), "Hello\nWorld")
+	assert.Equal(t, string(s.Trailer()), "Hello\nWorld")
 	assert.Equal(t, s.EndedWithNewline(), false)
 }
 
@@ -44,6 +46,21 @@ func TestHeaderFillsUpAcrossChunks(t *testing.T) {
 	s.Add([]byte("de"))
 	assert.Equal(t, s.Count(), int64(headerCapacity+3))
 	assert.Equal(t, string(s.Header()), first+"b")
+}
+
+// The trailer should keep only the last bytes, across chunks
+func TestTrailerKeepsTheLastBytes(t *testing.T) {
+	var s Summary
+
+	s.Add([]byte("ab"))
+	middle := strings.Repeat("m", trailerCapacity-1)
+	s.Add([]byte(middle))
+	assert.Equal(t, string(s.Trailer()), "b"+middle)
+
+	// A chunk larger than the trailer should replace it
+	last := strings.Repeat("l", trailerCapacity+1)
+	s.Add([]byte(last))
+	assert.Equal(t, string(s.Trailer()), last[1:])
 }
 
 func TestEmptyChunkChangesNothing(t *testing.T) {
@@ -74,8 +91,10 @@ func TestReset(t *testing.T) {
 
 	assert.Equal(t, s.Count(), int64(0))
 	assert.Equal(t, len(s.Header()), 0)
+	assert.Equal(t, len(s.Trailer()), 0)
 	assert.Equal(t, s.EndedWithNewline(), false)
 
 	s.Add([]byte("World"))
 	assert.Equal(t, string(s.Header()), "World")
+	assert.Equal(t, string(s.Trailer()), "World")
 }

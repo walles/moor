@@ -11,6 +11,10 @@ import (
 // replacement from appending when the file grows.
 const headerCapacity = 1024
 
+// Track the last N bytes read from the file, to be able to tell apart file
+// replacement from appending when the file grows.
+const trailerCapacity = 1024
+
 // Summary is what we know about the bytes read so far, across the initial read
 // and all appends.
 //
@@ -23,6 +27,9 @@ type Summary struct {
 
 	// The first bytes read, up to headerCapacity of them.
 	header []byte
+
+	// The last bytes read, up to trailerCapacity of them.
+	trailer []byte
 
 	// Whether the last byte read was a newline
 	endedWithNewline bool
@@ -44,6 +51,13 @@ func (s *Summary) Add(chunk []byte) {
 	headerRoom := headerCapacity - len(s.header)
 	fitsInHeader := min(headerRoom, len(chunk))
 	s.header = append(s.header, chunk[:fitsInHeader]...)
+
+	// Keep only the last bytes in the trailer
+	fitsInTrailer := min(trailerCapacity, len(chunk))
+	s.trailer = append(s.trailer, chunk[len(chunk)-fitsInTrailer:]...)
+	if len(s.trailer) > trailerCapacity {
+		s.trailer = s.trailer[len(s.trailer)-trailerCapacity:]
+	}
 }
 
 // Reset forgets everything added so far.
@@ -53,6 +67,7 @@ func (s *Summary) Reset() {
 
 	s.count = 0
 	s.header = nil
+	s.trailer = nil
 	s.endedWithNewline = false
 }
 
@@ -75,6 +90,15 @@ func (s *Summary) Header() []byte {
 	defer s.lock.Unlock()
 
 	return slices.Clone(s.header)
+}
+
+// Trailer returns a copy of the last bytes added, up to 1024 of them. Used to
+// determine if the file was replaced or appended to when it grows.
+func (s *Summary) Trailer() []byte {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return slices.Clone(s.trailer)
 }
 
 // EndedWithNewline tells whether the last byte added was a newline.
