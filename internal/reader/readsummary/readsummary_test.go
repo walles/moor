@@ -57,6 +57,10 @@ func TestTrailerKeepsTheLastBytes(t *testing.T) {
 	s.Add([]byte(middle))
 	assert.Equal(t, string(s.Trailer()), "b"+middle)
 
+	// One more byte should push the oldest one out
+	s.Add([]byte("z"))
+	assert.Equal(t, string(s.Trailer()), middle+"z")
+
 	// A chunk larger than the trailer should replace it
 	last := strings.Repeat("l", trailerCapacity+1)
 	s.Add([]byte(last))
