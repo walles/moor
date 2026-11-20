@@ -154,12 +154,10 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 		}
 	}
 
-	inspectionReader := inspectionReader{base: stream}
-
 	awaitingFirstByte := true
 	for !reader.closed.Load() {
 		byteBuffer := make([]byte, byteBufferSize)
-		readBytes, err := inspectionReader.Read(byteBuffer)
+		readBytes, err := stream.Read(byteBuffer)
 
 		if awaitingFirstByte && readBytes > 0 {
 			// We got our first byte!
@@ -173,6 +171,10 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 
 		// Error or not, handle the bytes that we got
 		reader.Lock()
+
+		// Does this chunk start out continuing the last line?
+		continuesLastLine := !reader.readSoFar.EndedWithNewline()
+
 		lineStart := 0
 		byteIndex := 0
 		for readBytes > 0 {
@@ -184,7 +186,7 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 
 			byteIndex += relativeNewlineLocation
 
-			considerAppending := lineStart == 0 && !reader.endsWithNewline
+			considerAppending := lineStart == 0 && continuesLastLine
 			pauseDuration := reader.assumeLockAndAddLine(byteBuffer[lineStart:byteIndex], considerAppending, &linePool)
 			t0 = t0.Add(pauseDuration)
 
@@ -194,12 +196,13 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 
 		// Handle any remaining bytes as a partial line
 		if lineStart < readBytes {
-			considerAppending := lineStart == 0 && !reader.endsWithNewline
+			considerAppending := lineStart == 0 && continuesLastLine
 			pauseDuration := reader.assumeLockAndAddLine(byteBuffer[lineStart:readBytes], considerAppending, &linePool)
 			t0 = t0.Add(pauseDuration)
 		}
 
-		reader.endsWithNewline = inspectionReader.endedWithNewline
+		// Lines added, track some stats!
+		reader.readSoFar.Add(byteBuffer[:readBytes])
 
 		reader.Unlock()
 
@@ -225,15 +228,6 @@ func (reader *ReaderImpl) consumeLinesFromStream(stream io.Reader) {
 			reader.Unlock()
 			break
 		}
-	}
-
-	if reader.FileName != nil {
-		reader.Lock()
-		reader.bytesCount += inspectionReader.bytesCount
-		if len(reader.headerBytes) == 0 && len(inspectionReader.headerBytes) > 0 {
-			reader.headerBytes = append([]byte(nil), inspectionReader.headerBytes...)
-		}
-		reader.Unlock()
 	}
 
 	if awaitingFirstByte {

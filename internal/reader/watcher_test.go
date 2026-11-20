@@ -73,7 +73,7 @@ func TestReadUpdatingFile(t *testing.T) {
 	const firstLineString = "First line\n"
 	testMe, file := setupWatcherTest(t, firstLineString)
 
-	assert.Equal(t, int(testMe.bytesCount), len([]byte(firstLineString)))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte(firstLineString)))
 	assertLines(t, testMe, "First line")
 
 	const secondLineString = "Second line\n"
@@ -82,7 +82,7 @@ func TestReadUpdatingFile(t *testing.T) {
 
 	waitForLineCount(t, testMe, 2)
 	assertLines(t, testMe, "First line", "Second line")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte(firstLineString+secondLineString)))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte(firstLineString+secondLineString)))
 
 	const thirdLineString = "Third line\n"
 	_, err = file.WriteString(thirdLineString)
@@ -90,7 +90,7 @@ func TestReadUpdatingFile(t *testing.T) {
 
 	waitForLineCount(t, testMe, 3)
 	assertLines(t, testMe, "First line", "Second line", "Third line")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte(firstLineString+secondLineString+thirdLineString)))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte(firstLineString+secondLineString+thirdLineString)))
 }
 
 // If a file is rewritten (shrunk and replaced with new content), tailing should
@@ -133,7 +133,7 @@ func TestReadUpdatingFile_InitiallyEmpty(t *testing.T) {
 // This test verifies it with the initial contents not ending with a linefeed.
 func TestReadUpdatingFile_HalfLine(t *testing.T) {
 	testMe, file := setupWatcherTest(t, "Start")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte("Start")))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte("Start")))
 
 	const secondLineString = ", end\n"
 	_, err := file.WriteString(secondLineString)
@@ -145,7 +145,7 @@ func TestReadUpdatingFile_HalfLine(t *testing.T) {
 	}, "waiting for line to update")
 
 	assertLines(t, testMe, "Start, end")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte("Start, end\n")))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte("Start, end\n")))
 }
 
 // If people keep appending to the currently opened file we should display those
@@ -167,7 +167,7 @@ func TestReadUpdatingFile_HalfUtf8(t *testing.T) {
 	}, "waiting for utf-8 char to complete")
 
 	assertLines(t, testMe, "här")
-	assert.Equal(t, int(testMe.bytesCount), len([]byte("här")))
+	assert.Equal(t, int(testMe.readSoFar.Count()), len([]byte("här")))
 }
 
 // If a file is completely rewritten and ends up not smaller than before, but clearly
@@ -285,7 +285,7 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 
 	assert.NilError(t, testMe.Wait())
 
-	assert.Equal(t, len(testMe.headerBytes) > 0, true)
+	assert.Equal(t, len(testMe.readSoFar.Header()) > 0, true)
 
 	action := determineTailAction(
 		gzippedName,
@@ -293,7 +293,7 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		nil, // statErr
-		testMe.headerBytes,
+		testMe.readSoFar.Header(),
 	)
 
 	assert.Equal(t, action, tailActionContinue)
