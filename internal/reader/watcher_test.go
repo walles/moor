@@ -3,6 +3,7 @@ package reader
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -209,6 +210,45 @@ func TestReadRewrittenFile_AfterAppend(t *testing.T) {
 
 	waitForLineCount(t, testMe, 3)
 	assertLines(t, testMe, "a", "c", "d")
+}
+
+// The first line of these is longer than the header we track, so only the
+// bytes after it can tell the files apart
+var longFirstLine = strings.Repeat("x", 2000)
+var originalContents = longFirstLine + "\nold\n"
+var replacementContents = longFirstLine + "\nnew\nlonger\n"
+
+// If a file is rewritten in place, starting with the same bytes and growing,
+// tailing should reload rather than append.
+//
+// Ref: https://github.com/walles/moor/pull/479
+func TestReadRewrittenFile_SameStart(t *testing.T) {
+	testMe, file := setupWatcherTest(t, originalContents)
+	assertLines(t, testMe, longFirstLine, "old")
+
+	_, err := file.WriteAt([]byte(replacementContents), 0)
+	assert.NilError(t, err)
+
+	waitForLineCount(t, testMe, 3)
+	assertLines(t, testMe, longFirstLine, "new", "longer")
+}
+
+// If another file is moved into place, starting with the same bytes and being
+// longer, tailing should reload rather than append.
+//
+// Ref: https://github.com/walles/moor/pull/479
+func TestReadReplacedFile_SameStart(t *testing.T) {
+	testMe, file := setupWatcherTest(t, originalContents)
+	assertLines(t, testMe, longFirstLine, "old")
+
+	replacement := file.Name() + ".new"
+	err := os.WriteFile(replacement, []byte(replacementContents), 0600)
+	assert.NilError(t, err)
+	t.Cleanup(func() { _ = os.Remove(replacement) })
+	assert.NilError(t, os.Rename(replacement, file.Name()))
+
+	waitForLineCount(t, testMe, 3)
+	assertLines(t, testMe, longFirstLine, "new", "longer")
 }
 
 type fakeFileInfo struct {
