@@ -74,12 +74,8 @@ func (closer zstdCloser) interrupt() error {
 
 // The second return value is the file name with any compression extension removed.
 func ZOpen(filename string) (io.ReadCloser, string, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, "", err
-	}
-
-	return zOpenFile(file, filename)
+	stream, highlightingFilename, _, err := zOpenWithStat(filename)
+	return stream, highlightingFilename, err
 }
 
 // zOpenWithStat is ZOpen() plus a stat of the opened file, nil if stat failed.
@@ -98,7 +94,6 @@ func zOpenWithStat(filename string) (io.ReadCloser, string, os.FileInfo, error) 
 	stat, err := file.Stat()
 	if err != nil {
 		log.Debugf("Failed to stat opened file %s: %s", filename, err)
-		stat = nil
 	}
 
 	stream, highlightingFilename, err := zOpenFile(file, filename)
