@@ -190,6 +190,27 @@ func TestReadRewrittenFile_Replaced(t *testing.T) {
 	assertLines(t, testMe, "Totally different data replaces the whole file")
 }
 
+// If a small file is appended to and then rewritten in place, starting with
+// the original contents and growing, tailing should reload rather than append.
+func TestReadRewrittenFile_AfterAppend(t *testing.T) {
+	testMe, file := setupWatcherTest(t, "a\n")
+
+	_, err := file.WriteString("b\n")
+	assert.NilError(t, err)
+	waitForLineCount(t, testMe, 2)
+	waitForCondition(t, func() bool {
+		testMe.RLock()
+		defer testMe.RUnlock()
+		return testMe.lastStat.Size() == 4
+	}, "waiting for the append to be noticed")
+
+	_, err = file.WriteAt([]byte("a\nc\nd\n"), 0)
+	assert.NilError(t, err)
+
+	waitForLineCount(t, testMe, 3)
+	assertLines(t, testMe, "a", "c", "d")
+}
+
 type fakeFileInfo struct {
 	size    int64
 	modTime time.Time
