@@ -38,16 +38,9 @@ const (
 func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	log.Debugf("Reloading file %s from the beginning", fileName)
 
-	stream, _, err := ZOpen(fileName)
+	stream, _, newStat, err := zOpenWithStat(fileName)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s for reloading: %w", fileName, err)
-	}
-
-	var newStat os.FileInfo
-	if fileStats, statErr := os.Stat(fileName); statErr == nil {
-		newStat = fileStats
-	} else {
-		log.Debugf("Failed to stat file %s immediately after opening for reload: %s", fileName, statErr.Error())
 	}
 
 	reader.Lock()
@@ -101,19 +94,17 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 //
 // Returns (shouldContinue, error): shouldContinue=false means tailing should stop.
 func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool, error) {
-	stream, _, err := ZOpen(fileName)
+	stream, _, newStat, err := zOpenWithStat(fileName)
 	if err != nil {
 		log.Debugf("Failed to open file %s for re-reading while tailing: %s", fileName, err.Error())
 		return false, nil
 	}
 
-	reader.Lock()
-	if fileStats, statErr := os.Stat(fileName); statErr == nil {
-		reader.lastStat = fileStats
-	} else {
-		log.Debugf("Failed to stat file %s immediately after opening for reading new bytes: %s", fileName, statErr.Error())
+	if newStat != nil {
+		reader.Lock()
+		reader.lastStat = newStat
+		reader.Unlock()
 	}
-	reader.Unlock()
 
 	seekable, ok := stream.(io.ReadSeekCloser)
 	if !ok {

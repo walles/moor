@@ -82,6 +82,33 @@ func ZOpen(filename string) (io.ReadCloser, string, error) {
 	return zOpenFile(file, filename)
 }
 
+// zOpenWithStat is ZOpen() plus a stat of the opened file, nil if stat failed.
+//
+// Stat-ing the opened file rather than its name makes sure the stat is of the
+// file we read, even if another file is moved into place in between. On
+// Windows, it also makes os.SameFile() compare the ID the file had when we
+// opened it, rather than the ID of whatever has the name when os.SameFile() is
+// first called.
+func zOpenWithStat(filename string) (io.ReadCloser, string, os.FileInfo, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		log.Debugf("Failed to stat opened file %s: %s", filename, err)
+		stat = nil
+	}
+
+	stream, highlightingFilename, err := zOpenFile(file, filename)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	return stream, highlightingFilename, stat, nil
+}
+
 // Decompress file based on its contents, with filename only used for naming the
 // result.
 //
