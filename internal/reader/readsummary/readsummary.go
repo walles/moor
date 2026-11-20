@@ -7,13 +7,12 @@ import (
 	"sync"
 )
 
-// Track the first N bytes read from the file, to be able to tell apart file
-// replacement from appending when the file grows.
-const headerCapacity = 1024
-
-// Track the last N bytes read from the file, to be able to tell apart file
-// replacement from appending when the file grows.
-const trailerCapacity = 1024
+// How many bytes to keep from each end of what we have read. Comparing these
+// with the file tells replacement apart from appending when it grows.
+const (
+	headerCapacity  = 1024
+	trailerCapacity = 1024
+)
 
 // Summary is what we know about the bytes read so far, across the initial read
 // and all appends.
@@ -83,8 +82,9 @@ func (s *Summary) Count() int64 {
 	return s.count
 }
 
-// Header returns a copy of the first bytes added, up to 1024 of them. Used
-// to determine if the file was replaced or appended to when it grows.
+// Header returns a copy of the first bytes added, up to headerCapacity of
+// them. Used to determine if the file was replaced or appended to when it
+// grows.
 func (s *Summary) Header() []byte {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -92,8 +92,9 @@ func (s *Summary) Header() []byte {
 	return slices.Clone(s.header)
 }
 
-// Trailer returns a copy of the last bytes added, up to 1024 of them. Used to
-// determine if the file was replaced or appended to when it grows.
+// Trailer returns a copy of the last bytes added, up to trailerCapacity of
+// them. Used to determine if the file was replaced or appended to when it
+// grows.
 func (s *Summary) Trailer() []byte {
 	s.lock.Lock()
 	defer s.lock.Unlock()
