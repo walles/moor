@@ -30,9 +30,7 @@ const (
 //
 // FIXME: This must only be called from the tailing goroutine. If called
 // concurrently with consumeLinesFromStream(), both goroutines will interleave
-// line additions and the read summary will be wrong. Also,
-// determineTailAction() reads the summary one getter at a time, and relies on
-// nobody adding to it in between. Fix this before adding any
+// line additions and the read summary will be wrong. Fix this before adding any
 // other callers (e.g. the 'r' key).
 func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	log.Debugf("Reloading file %s from the beginning", fileName)
@@ -143,10 +141,10 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 	return true, nil
 }
 
-// fileShouldBeReloaded checks if the file's current starting bytes still match the
+// headerChanged checks if the file's current starting bytes still match the
 // header we have recorded so far. Returns true if they differ (file was
 // rewritten) or if we are unsure due to errors.
-func fileShouldBeReloaded(fileName string, readSoFar *readsummary.Summary) bool {
+func headerChanged(fileName string, readSoFar *readsummary.Summary) bool {
 	headerBytes := readSoFar.Header()
 	if len(headerBytes) == 0 {
 		// We have no baseline to compare against (e.g., initially empty file).
@@ -188,13 +186,13 @@ func fileShouldBeReloaded(fileName string, readSoFar *readsummary.Summary) bool 
 	return true
 }
 
-// trailerMoved checks if the trailer we read last is still where we read it,
+// trailerChanged checks if the trailer we read last is still where we read it,
 // just before the byte count. Returns true if it isn't (file was replaced by one
 // starting out the same) or if we are unsure due to errors.
 //
 // Must not be called for compressed files, the byte count is not a file offset
 // for those.
-func trailerMoved(fileName string, readSoFar *readsummary.Summary) bool {
+func trailerChanged(fileName string, readSoFar *readsummary.Summary) bool {
 	bytesCount := readSoFar.Count()
 	trailerBytes := readSoFar.Trailer()
 	if len(trailerBytes) == 0 {
@@ -219,14 +217,21 @@ func trailerMoved(fileName string, readSoFar *readsummary.Summary) bool {
 	trailerOffset := bytesCount - int64(len(trailerBytes))
 	_, err = file.ReadAt(checkBuf, trailerOffset)
 	if err != nil {
-		// The file just grew past bytesCount, so this read should have
-		// succeeded. Reloading is the safe bet.
+		// Either reading failed, or the file is shorter than what we have read.
+		// The latter can happen since the caller compared the file size with
+		// our last stat, not with bytesCount. Either way, we can't tell this
+		// is an append, so reload.
 		return true
 	}
 
 	return !bytes.Equal(checkBuf, trailerBytes)
 }
 
+// determineTailAction decides what to do about changes to the file we tail.
+//
+// readSoFar is read one getter at a time, so nothing may add to it while this
+// runs. That holds as long as only the tailing goroutine adds to it, since
+// this is called from that same goroutine.
 func determineTailAction(
 	fileName string,
 	isCompressed bool,
@@ -259,12 +264,12 @@ func determineTailAction(
 			return tailActionReload
 		}
 
-		if fileShouldBeReloaded(fileName, readSoFar) {
+		if headerChanged(fileName, readSoFar) {
 			log.Debugf("File %s boundary bytes changed (likely rewritten) while growing, reloading", fileName)
 			return tailActionReload
 		}
 
-		if trailerMoved(fileName, readSoFar) {
+		if trailerChanged(fileName, readSoFar) {
 			log.Debugf("File %s trailing bytes changed (likely replaced) while growing, reloading", fileName)
 			return tailActionReload
 		}
@@ -280,7 +285,7 @@ func determineTailAction(
 		return tailActionReload
 	}
 
-	if fileShouldBeReloaded(fileName, readSoFar) {
+	if headerChanged(fileName, readSoFar) {
 		log.Debugf("File %s changed, reloading", fileName)
 		return tailActionReload
 	}
