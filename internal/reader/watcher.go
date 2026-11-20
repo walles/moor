@@ -17,7 +17,7 @@ import (
 // tests to make them run faster.
 var tailPollInterval = time.Second
 
-// Overridden in tests, os.SameFile() only works on what os.Stat() returned.
+// Overridden in tests, os.SameFile() doesn't work on the test fakes.
 var sameFile = os.SameFile
 
 type tailAction int
@@ -47,9 +47,11 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	reader.lines = reader.lines[:0]
 	reader.readSoFar.Reset()
 	reader.Err = nil
-	if newStat != nil {
-		reader.lastStat = newStat
-	}
+
+	// Store this even if nil. Keeping a stale stat could make us reload over
+	// and over, while a nil stat makes us stop tailing.
+	reader.lastStat = newStat
+
 	reader.ReadingDone.Store(false)
 	reader.HighlightingDone.Store(false)
 	reader.Unlock()

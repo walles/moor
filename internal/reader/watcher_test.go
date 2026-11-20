@@ -390,8 +390,13 @@ func TestDetermineTailAction_replacedByLargerFile(t *testing.T) {
 	fileName := filepath.Join(t.TempDir(), "test.txt")
 	err := os.WriteFile(fileName, []byte("old\n"), 0600)
 	assert.NilError(t, err)
-	oldStat, err := os.Stat(fileName)
+
+	// Stat the opened file like the reader does. On Windows, a stat of the file
+	// name would get its file ID only when compared, after the rename below.
+	stream, _, oldStat, err := zOpenWithStat(fileName)
 	assert.NilError(t, err)
+	assert.Assert(t, oldStat != nil)
+	assert.NilError(t, stream.Close())
 
 	err = os.WriteFile(fileName+".new", []byte("old\nnew\n"), 0600)
 	assert.NilError(t, err)
