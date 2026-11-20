@@ -242,6 +242,9 @@ func TestReadReplacedFile_SameStart(t *testing.T) {
 	testMe, file := setupWatcherTest(t, originalContents)
 	assertLines(t, testMe, longFirstLine, "old")
 
+	// Windows refuses renaming over files that are open
+	assert.NilError(t, file.Close())
+
 	replacement := file.Name() + ".new"
 	err := os.WriteFile(replacement, []byte(replacementContents), 0600)
 	assert.NilError(t, err)
@@ -250,6 +253,41 @@ func TestReadReplacedFile_SameStart(t *testing.T) {
 
 	waitForLineCount(t, testMe, 3)
 	assertLines(t, testMe, longFirstLine, "new", "longer")
+}
+
+// Appending to a file must be taken for an append. Reloading would show the
+// same lines, so the tests that only check lines can't tell these apart.
+func TestDetermineTailAction_RealAppend(t *testing.T) {
+	// Longer than the header and the trailer together
+	contents := []byte(strings.Repeat("0123456789\n", 300))
+
+	for _, appended := range []string{"x", "More lines\nAnd more\n"} {
+		t.Run(appended, func(t *testing.T) {
+			fileName := filepath.Join(t.TempDir(), "file.txt")
+			assert.NilError(t, os.WriteFile(fileName, contents, 0600))
+
+			// Read in two chunks with the trailer spanning both of them
+			var readSoFar readsummary.Summary
+			split := len(contents) - 500
+			readSoFar.Add(contents[:split])
+			readSoFar.Add(contents[split:])
+
+			oldStat, err := os.Stat(fileName)
+			assert.NilError(t, err)
+
+			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0)
+			assert.NilError(t, err)
+			_, err = file.WriteString(appended)
+			assert.NilError(t, err)
+			assert.NilError(t, file.Close())
+
+			newStat, err := os.Stat(fileName)
+			assert.NilError(t, err)
+
+			action := determineTailAction(fileName, false, oldStat, newStat, nil, &readSoFar)
+			assert.Equal(t, action, tailActionAppend)
+		})
+	}
 }
 
 type fakeFileInfo struct {
