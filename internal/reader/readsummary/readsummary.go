@@ -51,10 +51,13 @@ func (s *Summary) Add(chunk []byte) {
 	fitsInHeader := min(headerRoom, len(chunk))
 	s.header = append(s.header, chunk[:fitsInHeader]...)
 
-	// Keep only the last bytes in the trailer
+	// Keep only the last bytes in the trailer, start by adding at most
+	// trailerCapacity bytes to the trailer...
 	fitsInTrailer := min(trailerCapacity, len(chunk))
 	s.trailer = append(s.trailer, chunk[len(chunk)-fitsInTrailer:]...)
+
 	if len(s.trailer) > trailerCapacity {
+		// ... but we overshot, remove the oldest bytes from the start
 		s.trailer = s.trailer[len(s.trailer)-trailerCapacity:]
 	}
 }
