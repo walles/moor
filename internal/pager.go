@@ -641,6 +641,18 @@ func (p *Pager) scrollTowardsTargetLine() {
 
 	// We see the target, scroll to it
 	p.scrollPosition = NewScrollPositionFromIndex(*p.TargetLine, "goToTargetLine")
+
+	p.readerLock.Lock()
+	readingDone := p.views[p.currentView].reader.ReadingDone.Load()
+	p.readerLock.Unlock()
+
+	// Until there are enough lines after the target to fill the screen,
+	// rendering puts us further up. Keep the target until then, so that we come
+	// back down as more lines arrive.
+	if !readingDone && lineCount < p.TargetLine.Index()+int(p.visibleHeight()) {
+		return
+	}
+
 	p.setTargetLine(nil)
 }
 

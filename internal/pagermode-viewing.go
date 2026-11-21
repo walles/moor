@@ -79,6 +79,7 @@ func (m PagerModeViewing) onKey(keyCode twin.KeyCode) {
 		p.handleScrolledUp()
 
 	case twin.KeyEnd:
+		p.setTargetLine(nil) // Follow, wherever we were heading before
 		p.scrollToEnd()
 
 	case twin.KeyPgUp:
@@ -146,6 +147,7 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.handleScrolledUp()
 
 	case '>', 'G':
+		p.setTargetLine(nil) // Follow, wherever we were heading before
 		p.scrollToEnd()
 
 	// '\x06' = CTRL-f, should work like just 'f'.
