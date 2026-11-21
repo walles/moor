@@ -299,3 +299,43 @@ func TestCloneOfReaderStillReadingIsHighlighted(t *testing.T) {
 
 	assert.Assert(t, !original.ReadingDone.Load(), "Test setup broken, original should still be reading")
 }
+
+// A clone shows the same name as the original, even if the name was changed
+// after the original was created
+func TestCloneKeepsDisplayName(t *testing.T) {
+	original, err := NewFromFilename(writeGoSource(t, 10), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	defer original.Close()
+
+	title := "My Title"
+	original.Lock()
+	original.DisplayName = &title
+	original.Unlock()
+
+	clone, err := original.Clone()
+	assert.NilError(t, err)
+	defer clone.Close()
+
+	clone.RLock()
+	defer clone.RUnlock()
+	assert.Equal(t, *clone.DisplayName, title)
+}
+
+// A clone reads as far as the original was told to, not just as far as readers
+// do by default
+func TestCloneKeepsPauseLimit(t *testing.T) {
+	original, err := NewFromFilename(writeGoSource(t, 10), formatters.TTY16m, ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	defer original.Close()
+
+	pauseLimit := 3 * DEFAULT_PAUSE_AFTER_LINES
+	original.SetPauseAfterLines(pauseLimit)
+
+	clone, err := original.Clone()
+	assert.NilError(t, err)
+	defer clone.Close()
+
+	clone.RLock()
+	defer clone.RUnlock()
+	assert.Equal(t, clone.pauseAfterLines, pauseLimit)
+}
