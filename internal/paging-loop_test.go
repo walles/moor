@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,6 +146,12 @@ func TestRewrittenFileIsReloadedWhenSwitchedTo(t *testing.T) {
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 2)), 0o600))
 	waitUntil(t, b.WantsReload, func() string { return "the rewritten file to be noticed" })
 
+	framesBeforeSwitch := len(screen.shownFrames())
 	typeRunes(t, screen, pagingDone, ":n")
 	screen.waitForRow(t, "new0")
+
+	for _, frame := range screen.shownFrames()[framesBeforeSwitch:] {
+		assert.Assert(t, !slices.Contains(frame, "old0"),
+			"Stale content shown after switching:\n%s", strings.Join(frame, "\n"))
+	}
 }

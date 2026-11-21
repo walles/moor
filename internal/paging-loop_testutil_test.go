@@ -39,7 +39,7 @@ type pagingLoopScreen struct {
 	shows  atomic.Int64
 
 	frameLock sync.Mutex
-	frame     []string // Rows of the most recently shown frame
+	frames    [][]string // Rows of every shown frame, oldest first
 }
 
 func newPagingLoopScreen(width int, height int) *pagingLoopScreen {
@@ -69,13 +69,24 @@ func (screen *pagingLoopScreen) Show() {
 
 	screen.frameLock.Lock()
 	defer screen.frameLock.Unlock()
-	screen.frame = frame
+	screen.frames = append(screen.frames, frame)
 }
 
+// Rows of the most recently shown frame
 func (screen *pagingLoopScreen) shownRows() []string {
 	screen.frameLock.Lock()
 	defer screen.frameLock.Unlock()
-	return screen.frame
+	if len(screen.frames) == 0 {
+		return nil
+	}
+	return screen.frames[len(screen.frames)-1]
+}
+
+// All frames shown so far, oldest first
+func (screen *pagingLoopScreen) shownFrames() [][]string {
+	screen.frameLock.Lock()
+	defer screen.frameLock.Unlock()
+	return slices.Clone(screen.frames)
 }
 
 // Wait until condition is true, however long that takes. waitingFor() says what
