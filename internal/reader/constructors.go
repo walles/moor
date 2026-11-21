@@ -4,7 +4,6 @@ package reader
 
 import (
 	"io"
-	"os"
 	"path/filepath"
 	"runtime/debug"
 	"strings"
@@ -33,14 +32,9 @@ func NewFromFilename(filename string, formatter chroma.Formatter, options Reader
 		return nil, fileError
 	}
 
-	stream, highlightingFilename, err := ZOpen(filename)
+	stream, highlightingFilename, initialStat, err := zOpenWithStat(filename)
 	if err != nil {
 		return nil, err
-	}
-
-	var initialStat os.FileInfo
-	if fileStats, statErr := os.Stat(filename); statErr == nil {
-		initialStat = fileStats
 	}
 
 	if options.Lexer == nil {

@@ -74,12 +74,34 @@ func (closer zstdCloser) interrupt() error {
 
 // The second return value is the file name with any compression extension removed.
 func ZOpen(filename string) (io.ReadCloser, string, error) {
+	stream, highlightingFilename, _, err := zOpenWithStat(filename)
+	return stream, highlightingFilename, err
+}
+
+// zOpenWithStat is ZOpen() plus a stat of the opened file, nil if stat failed.
+//
+// Stat-ing the opened file rather than its name makes sure the stat is of the
+// file we read, even if another file is moved into place in between. On
+// Windows, it also makes os.SameFile() compare the ID the file had when we
+// opened it, rather than the ID of whatever has the name when os.SameFile() is
+// first called.
+func zOpenWithStat(filename string) (io.ReadCloser, string, os.FileInfo, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		return nil, "", err
+		return nil, "", nil, err
 	}
 
-	return zOpenFile(file, filename)
+	stat, err := file.Stat()
+	if err != nil {
+		log.Debugf("Failed to stat opened file %s: %s", filename, err)
+	}
+
+	stream, highlightingFilename, err := zOpenFile(file, filename)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	return stream, highlightingFilename, stat, nil
 }
 
 // Decompress file based on its contents, with filename only used for naming the

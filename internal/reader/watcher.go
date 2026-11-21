@@ -10,11 +10,15 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 )
 
 // How often tailFile() checks the tailed file for changes. Overridden in
 // tests to make them run faster.
 var tailPollInterval = time.Second
+
+// Overridden in tests, os.SameFile() doesn't work on the test fakes.
+var sameFile = os.SameFile
 
 type tailAction int
 
@@ -29,30 +33,25 @@ const (
 //
 // FIXME: This must only be called from the tailing goroutine. If called
 // concurrently with consumeLinesFromStream(), both goroutines will interleave
-// line additions and the byte count will be wrong. Fix this before adding any
+// line additions and the read summary will be wrong. Fix this before adding any
 // other callers (e.g. the 'r' key).
 func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 	log.Debugf("Reloading file %s from the beginning", fileName)
 
-	stream, _, err := ZOpen(fileName)
+	stream, _, newStat, err := zOpenWithStat(fileName)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s for reloading: %w", fileName, err)
-	}
-
-	var newStat os.FileInfo
-	if fileStats, statErr := os.Stat(fileName); statErr == nil {
-		newStat = fileStats
-	} else {
-		log.Debugf("Failed to stat file %s immediately after opening for reload: %s", fileName, statErr.Error())
 	}
 
 	reader.Lock()
 	reader.lines = reader.lines[:0]
 	reader.readSoFar.Reset()
 	reader.Err = nil
-	if newStat != nil {
-		reader.lastStat = newStat
-	}
+
+	// Store this even if nil. Keeping a stale stat could make us reload over
+	// and over, while a nil stat makes us stop tailing.
+	reader.lastStat = newStat
+
 	reader.ReadingDone.Store(false)
 	reader.HighlightingDone.Store(false)
 	reader.Unlock()
@@ -97,19 +96,17 @@ func (reader *ReaderImpl) reloadFromFile(fileName string) error {
 //
 // Returns (shouldContinue, error): shouldContinue=false means tailing should stop.
 func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool, error) {
-	stream, _, err := ZOpen(fileName)
+	stream, _, newStat, err := zOpenWithStat(fileName)
 	if err != nil {
 		log.Debugf("Failed to open file %s for re-reading while tailing: %s", fileName, err.Error())
 		return false, nil
 	}
 
-	reader.Lock()
-	if fileStats, statErr := os.Stat(fileName); statErr == nil {
-		reader.lastStat = fileStats
-	} else {
-		log.Debugf("Failed to stat file %s immediately after opening for reading new bytes: %s", fileName, statErr.Error())
+	if newStat != nil {
+		reader.Lock()
+		reader.lastStat = newStat
+		reader.Unlock()
 	}
-	reader.Unlock()
 
 	seekable, ok := stream.(io.ReadSeekCloser)
 	if !ok {
@@ -140,10 +137,11 @@ func (reader *ReaderImpl) readNewBytes(fileName string, bytesCount int64) (bool,
 	return true, nil
 }
 
-// fileShouldBeReloaded checks if the file's current starting bytes still match the
-// headerBytes we have recorded so far. Returns true if they differ (file was
+// headerChanged checks if the file's current starting bytes still match the
+// header we have recorded so far. Returns true if they differ (file was
 // rewritten) or if we are unsure due to errors.
-func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
+func headerChanged(fileName string, readSoFar *readsummary.Summary) bool {
+	headerBytes := readSoFar.Header()
 	if len(headerBytes) == 0 {
 		// We have no baseline to compare against (e.g., initially empty file).
 		//
@@ -184,13 +182,59 @@ func fileShouldBeReloaded(fileName string, headerBytes []byte) bool {
 	return true
 }
 
+// trailerChanged checks if the trailer we read last is still where we read it,
+// just before the byte count. Returns true if it isn't (file was replaced by one
+// starting out the same) or if we are unsure due to errors.
+//
+// Must not be called for compressed files, the byte count is not a file offset
+// for those.
+func trailerChanged(fileName string, readSoFar *readsummary.Summary) bool {
+	bytesCount := readSoFar.Count()
+	trailerBytes := readSoFar.Trailer()
+	if len(trailerBytes) == 0 {
+		// Nothing read so far, so anything is an append
+		return false
+	}
+
+	file, err := os.Open(fileName)
+	if err != nil {
+		// Stat() succeeded just microseconds ago. If we can't open it now, the
+		// file was likely deleted, rotated, or permissions changed. Safest to
+		// reload.
+		return true
+	}
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			log.Debugf("Failed to close file %s after checking trailing bytes: %s", fileName, closeErr.Error())
+		}
+	}()
+
+	checkBuf := make([]byte, len(trailerBytes))
+	trailerOffset := bytesCount - int64(len(trailerBytes))
+	_, err = file.ReadAt(checkBuf, trailerOffset)
+	if err != nil {
+		// Either reading failed, or the file is shorter than what we have read.
+		// The latter can happen since the caller compared the file size with
+		// our last stat, not with bytesCount. Either way, we can't tell this
+		// is an append, so reload.
+		return true
+	}
+
+	return !bytes.Equal(checkBuf, trailerBytes)
+}
+
+// determineTailAction decides what to do about changes to the file we tail.
+//
+// readSoFar is read one getter at a time, so nothing may add to it while this
+// runs. That holds as long as only the tailing goroutine adds to it, since
+// this is called from that same goroutine.
 func determineTailAction(
 	fileName string,
 	isCompressed bool,
 	oldStat os.FileInfo,
 	newStat os.FileInfo,
 	statErr error,
-	headerBytes []byte,
+	readSoFar *readsummary.Summary,
 ) tailAction {
 	if statErr != nil {
 		log.Debugf("Failed to stat file %s while tailing, giving up: %s", fileName, statErr.Error())
@@ -200,6 +244,13 @@ func determineTailAction(
 	if oldStat == nil {
 		log.Debugf("Previous stat unknown for %s, stop tailing", fileName)
 		return tailActionStop
+	}
+
+	if !sameFile(oldStat, newStat) {
+		// Another file was moved into place. Even if it starts with the same
+		// bytes as the old one, it is not an append.
+		log.Debugf("File %s was replaced, reloading", fileName)
+		return tailActionReload
 	}
 
 	oldSize := oldStat.Size()
@@ -216,8 +267,13 @@ func determineTailAction(
 			return tailActionReload
 		}
 
-		if fileShouldBeReloaded(fileName, headerBytes) {
+		if headerChanged(fileName, readSoFar) {
 			log.Debugf("File %s boundary bytes changed (likely rewritten) while growing, reloading", fileName)
+			return tailActionReload
+		}
+
+		if trailerChanged(fileName, readSoFar) {
+			log.Debugf("File %s trailing bytes changed (likely replaced) while growing, reloading", fileName)
 			return tailActionReload
 		}
 
@@ -232,7 +288,7 @@ func determineTailAction(
 		return tailActionReload
 	}
 
-	if fileShouldBeReloaded(fileName, headerBytes) {
+	if headerChanged(fileName, readSoFar) {
 		log.Debugf("File %s changed, reloading", fileName)
 		return tailActionReload
 	}
@@ -250,8 +306,6 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	reader.RLock()
 	fileName := reader.FileName
 	isCompressed := reader.IsCompressed
-	bytesCount := reader.readSoFar.Count()
-	headerBytes := reader.readSoFar.Header()
 	oldStat := reader.lastStat
 	reader.RUnlock()
 
@@ -260,7 +314,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 	}
 
 	newStat, statErr := os.Stat(*fileName)
-	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, headerBytes)
+	action := determineTailAction(*fileName, isCompressed, oldStat, newStat, statErr, &reader.readSoFar)
 
 	switch action {
 	case tailActionStop:
@@ -275,7 +329,7 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 		}
 		return true, nil
 	case tailActionAppend:
-		return reader.readNewBytes(*fileName, bytesCount)
+		return reader.readNewBytes(*fileName, reader.readSoFar.Count())
 	default:
 		return false, nil
 	}

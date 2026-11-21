@@ -3,12 +3,14 @@ package reader
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/walles/moor/v2/internal/linemetadata"
+	"github.com/walles/moor/v2/internal/reader/readsummary"
 	"gotest.tools/v3/assert"
 )
 
@@ -18,6 +20,12 @@ import (
 // goroutine) starts, so there's no data race with tailFile()'s reads of it.
 func TestMain(m *testing.M) {
 	tailPollInterval = 10 * time.Millisecond
+	sameFile = func(oldStat, newStat os.FileInfo) bool {
+		if _, isFake := oldStat.(fakeFileInfo); isFake {
+			return true
+		}
+		return os.SameFile(oldStat, newStat)
+	}
 	os.Exit(m.Run())
 }
 
@@ -211,6 +219,83 @@ func TestReadRewrittenFile_AfterAppend(t *testing.T) {
 	assertLines(t, testMe, "a", "c", "d")
 }
 
+// The first line of these is longer than the header we track, so only the
+// bytes after it can tell the files apart
+var longFirstLine = strings.Repeat("x", 2000)
+var originalContents = longFirstLine + "\nold\n"
+var replacementContents = longFirstLine + "\nnew\nlonger\n"
+
+// If a file is rewritten in place, starting with the same bytes and growing,
+// tailing should reload rather than append.
+//
+// Ref: https://github.com/walles/moor/pull/479
+func TestReadRewrittenFile_SameStart(t *testing.T) {
+	testMe, file := setupWatcherTest(t, originalContents)
+	assertLines(t, testMe, longFirstLine, "old")
+
+	_, err := file.WriteAt([]byte(replacementContents), 0)
+	assert.NilError(t, err)
+
+	waitForLineCount(t, testMe, 3)
+	assertLines(t, testMe, longFirstLine, "new", "longer")
+}
+
+// If another file is moved into place, starting with the same bytes and being
+// longer, tailing should reload rather than append.
+//
+// Ref: https://github.com/walles/moor/pull/479
+func TestReadReplacedFile_SameStart(t *testing.T) {
+	testMe, file := setupWatcherTest(t, originalContents)
+	assertLines(t, testMe, longFirstLine, "old")
+
+	// Windows refuses renaming over files that are open
+	assert.NilError(t, file.Close())
+
+	replacement := file.Name() + ".new"
+	err := os.WriteFile(replacement, []byte(replacementContents), 0600)
+	assert.NilError(t, err)
+	t.Cleanup(func() { _ = os.Remove(replacement) })
+	assert.NilError(t, os.Rename(replacement, file.Name()))
+
+	waitForLineCount(t, testMe, 3)
+	assertLines(t, testMe, longFirstLine, "new", "longer")
+}
+
+// Appending to a file must be taken for an append. Reloading would show the
+// same lines, so the tests that only check lines can't tell these apart.
+func TestDetermineTailAction_RealAppend(t *testing.T) {
+	// Longer than the header and the trailer together
+	contents := []byte(strings.Repeat("0123456789\n", 300))
+
+	for _, appended := range []string{"x", "More lines\nAnd more\n"} {
+		t.Run(appended, func(t *testing.T) {
+			fileName := filepath.Join(t.TempDir(), "file.txt")
+			assert.NilError(t, os.WriteFile(fileName, contents, 0600))
+
+			// Read in two chunks with the trailer spanning both of them
+			var readSoFar readsummary.Summary
+			split := len(contents) - 500
+			readSoFar.Add(contents[:split])
+			readSoFar.Add(contents[split:])
+
+			oldStat, err := os.Stat(fileName)
+			assert.NilError(t, err)
+
+			file, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, 0)
+			assert.NilError(t, err)
+			_, err = file.WriteString(appended)
+			assert.NilError(t, err)
+			assert.NilError(t, file.Close())
+
+			newStat, err := os.Stat(fileName)
+			assert.NilError(t, err)
+
+			action := determineTailAction(fileName, false, oldStat, newStat, nil, &readSoFar)
+			assert.Equal(t, action, tailActionAppend)
+		})
+	}
+}
+
 type fakeFileInfo struct {
 	size    int64
 	modTime time.Time
@@ -268,7 +353,7 @@ func TestDetermineTailAction(t *testing.T) {
 				oldStat,
 				fakeFileInfo{size: tt.newSize, modTime: tt.newModTime},
 				tt.statErr,
-				nil, // headerBytes
+				&readsummary.Summary{},
 			)
 			assert.Equal(t, actual, tt.expected)
 		})
@@ -293,8 +378,44 @@ func TestDetermineTailAction_gzippedUnchanged(t *testing.T) {
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		fakeFileInfo{size: 1234, modTime: time.Unix(1000, 0)},
 		nil, // statErr
-		testMe.readSoFar.Header(),
+		&testMe.readSoFar,
 	)
 
 	assert.Equal(t, action, tailActionContinue)
+}
+
+// A file that another file was moved into place over must be reloaded, also
+// when it looks like the old file with more data at the end.
+func TestDetermineTailAction_replacedByLargerFile(t *testing.T) {
+	fileName := filepath.Join(t.TempDir(), "test.txt")
+	err := os.WriteFile(fileName, []byte("old\n"), 0600)
+	assert.NilError(t, err)
+
+	// Stat the opened file like the reader does. On Windows, a stat of the file
+	// name would get its file ID only when compared, after the rename below.
+	stream, _, oldStat, err := zOpenWithStat(fileName)
+	assert.NilError(t, err)
+	assert.Assert(t, oldStat != nil)
+	assert.NilError(t, stream.Close())
+
+	err = os.WriteFile(fileName+".new", []byte("old\nnew\n"), 0600)
+	assert.NilError(t, err)
+	err = os.Rename(fileName+".new", fileName)
+	assert.NilError(t, err)
+	newStat, err := os.Stat(fileName)
+	assert.NilError(t, err)
+
+	var readSoFar readsummary.Summary
+	readSoFar.Add([]byte("old\n"))
+
+	action := determineTailAction(
+		fileName,
+		false, // isCompressed
+		oldStat,
+		newStat,
+		nil, // statErr
+		&readSoFar,
+	)
+
+	assert.Equal(t, action, tailActionReload)
 }
