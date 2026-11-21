@@ -339,3 +339,28 @@ func TestCloneKeepsPauseLimit(t *testing.T) {
 	defer clone.RUnlock()
 	assert.Equal(t, clone.pauseAfterLines, pauseLimit)
 }
+
+// Highlighting is wasted on a reader nobody is going to look at any more
+func TestClosedReaderSkipsHighlighting(t *testing.T) {
+	// Pausing keeps the reader from finishing before we close it
+	pauseAfterLines := 2
+	testMe, err := NewFromFilename(writeGoSource(t, 10), formatters.TTY16m, ReaderOptions{
+		PauseAfterLines: &pauseAfterLines,
+		Style:           styles.Get("native"),
+	})
+	assert.NilError(t, err)
+	for !testMe.PauseStatus.Load() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	testMe.Close()
+	for !testMe.HighlightingDone.Load() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	testMe.RLock()
+	defer testMe.RUnlock()
+	assert.Assert(t, len(testMe.lines) > 0)
+	assert.Assert(t, !bytes.Contains(testMe.lines[0].raw, []byte("\x1b[")),
+		"Expected no highlighting, got: %q", testMe.lines[0].raw)
+}
