@@ -29,67 +29,22 @@ const (
 	tailActionAppend                     // File was appended to, read the new contents
 )
 
-// reloadFromFile clears the current content and re-reads the file from scratch.
-//
-// FIXME: This must only be called from the tailing goroutine. If called
-// concurrently with consumeLinesFromStream(), both goroutines will interleave
-// line additions and the read summary will be wrong. Fix this before adding any
-// other callers (e.g. the 'r' key).
-func (reader *ReaderImpl) reloadFromFile(fileName string) error {
-	log.Debugf("Reloading file %s from the beginning", fileName)
+// requestReload tells the pager this reader has gone stale and needs to be
+// replaced by a fresh one.
+func (reader *ReaderImpl) requestReload() {
+	reader.reloadWanted.Store(true)
 
-	stream, _, newStat, err := zOpenWithStat(fileName)
-	if err != nil {
-		return fmt.Errorf("failed to open file %s for reloading: %w", fileName, err)
-	}
-
-	reader.Lock()
-	reader.lines = reader.lines[:0]
-	reader.readSoFar.Reset()
-	reader.Err = nil
-
-	// Store this even if nil. Keeping a stale stat could make us reload over
-	// and over, while a nil stat makes us stop tailing.
-	reader.lastStat = newStat
-
-	reader.ReadingDone.Store(false)
-	reader.HighlightingDone.Store(false)
-	reader.Unlock()
-
-	// Signal the pager to redraw the now-empty content
+	// The pager looks for reload requests when told about new lines
 	select {
 	case reader.MoreLinesAdded <- true:
 	default:
 	}
+}
 
-	reader.consumeLinesFromStream(stream)
-	err = stream.Close()
-	if err != nil {
-		return fmt.Errorf("failed to close file %s after reloading: %w", fileName, err)
-	}
-
-	reader.ReadingDone.Store(true)
-	select {
-	case reader.MaybeDone <- true:
-	default:
-	}
-
-	reader.RLock()
-	formatter := reader.formatter
-	options := reader.readerOptions
-	reader.RUnlock()
-
-	if formatter != nil && options.Style != nil {
-		highlightFromMemory(reader, formatter, options)
-	}
-
-	reader.HighlightingDone.Store(true)
-	select {
-	case reader.MaybeDone <- true:
-	default:
-	}
-
-	return nil
+// WantsReload is true if the file was rewritten after we read it. The pager
+// should then replace this reader with a clone of it.
+func (reader *ReaderImpl) WantsReload() bool {
+	return reader.reloadWanted.Load()
 }
 
 // readNewBytes reads bytes appended to the file since we last read it.
@@ -323,11 +278,10 @@ func (reader *ReaderImpl) tailOnce() (bool, error) {
 		log.Tracef("File %s unchanged at %d bytes, continue tailing", *fileName, newStat.Size())
 		return true, nil
 	case tailActionReload:
-		err := reader.reloadFromFile(*fileName)
-		if err != nil {
-			return false, err
-		}
-		return true, nil
+		// Our clone will do the tailing from here
+		log.Debugf("Requesting reload of %s", *fileName)
+		reader.requestReload()
+		return false, nil
 	case tailActionAppend:
 		return reader.readNewBytes(*fileName, reader.readSoFar.Count())
 	default:

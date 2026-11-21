@@ -523,6 +523,17 @@ func (p *Pager) ReloadCurrentReader() {
 	}
 }
 
+// Reload the current reader if its file was rewritten on disk
+func (p *Pager) reloadCurrentReaderIfWanted() {
+	p.readerLock.Lock()
+	current := p.views[p.currentView].reader
+	p.readerLock.Unlock()
+
+	if current.WantsReload() {
+		p.ReloadCurrentReader()
+	}
+}
+
 func (p *Pager) handleScrolledUp() {
 	p.setTargetLine(nil)
 }
@@ -866,6 +877,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			return
 
 		case eventMoreLinesAvailable:
+			p.reloadCurrentReaderIfWanted()
 			p.scrollTowardsTargetLine()
 
 		case eventMaybeDone:

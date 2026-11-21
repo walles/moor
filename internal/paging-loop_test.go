@@ -102,3 +102,50 @@ func TestReloadWhileStillReading(t *testing.T) {
 
 	screen.waitForRow(t, "new0")
 }
+
+// A file rewritten on disk must show up rewritten in the pager
+func TestRewrittenFileIsReloaded(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 3)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 2)), 0o600))
+
+	screen.waitForRowForever("new0")
+}
+
+// A file rewritten on disk while we were looking at another one must show up
+// rewritten when we switch to it
+func TestRewrittenFileIsReloadedWhenSwitchedTo(t *testing.T) {
+	a := reader.NewFromTextForTesting("a", linesForTesting("a", 3))
+
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 3)), 0o600))
+	b, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+	assert.NilError(t, b.Wait())
+
+	pager := NewPager(a, b)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "a0")
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 2)), 0o600))
+	for !b.WantsReload() {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	typeRunes(t, screen, pagingDone, ":n")
+	screen.waitForRow(t, "new0")
+}

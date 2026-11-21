@@ -87,6 +87,21 @@ func (screen *pagingLoopScreen) waitForRow(t *testing.T, want string) []string {
 	return nil
 }
 
+// Wait until some shown row says exactly this, however long that takes.
+//
+// For things that take an unknown amount of time, like the reader noticing a
+// file change. If this hangs, the pager never got there.
+func (screen *pagingLoopScreen) waitForRowForever(want string) {
+	for {
+		for _, row := range screen.shownRows() {
+			if row == want {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // Start paging in the background, and stop paging again when the test ends.
 //
 // Returns a channel that is closed once paging is done.
