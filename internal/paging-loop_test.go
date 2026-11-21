@@ -60,10 +60,6 @@ func TestReloadKeepsFilter(t *testing.T) {
 	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
 	assert.NilError(t, err)
 	assert.NilError(t, r.Wait())
-	for !r.HighlightingDone.Load() {
-		// Reloading is ignored until highlighting is done
-		<-r.MaybeDone
-	}
 
 	pager := NewPager(r)
 	pager.ShowLineNumbers = false

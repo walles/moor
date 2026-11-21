@@ -503,17 +503,6 @@ func (p *Pager) ReloadCurrentReader() {
 	defer p.readerLock.Unlock()
 
 	current := p.views[p.currentView].reader
-	if !current.ReadingDone.Load() || !current.HighlightingDone.Load() {
-		// The reader's formatting options (like the Style) are fully populated only
-		// once the initial read/highlighting pass consumes them from its channels.
-		// If we clone the reader before this happens, we copy a nil style, and the
-		// cloned reader will deadlock forever waiting for a style it will never receive.
-		//
-		// So let's just ignore this request. This should clear up quickly, and
-		// if the user presses 'r' again the reload will go through.
-		return
-	}
-
 	clone, err := current.Clone()
 	if err != nil {
 		log.Warnf("Failed to clone reader for reloading: %v", err)
