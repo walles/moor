@@ -609,6 +609,12 @@ func (reader *ReaderImpl) SetPauseAfterLines(lines int) {
 }
 
 func (reader *ReaderImpl) SetStyleForHighlighting(style chroma.Style) {
+	// Our reading goroutine picks the style up from the channel only once it
+	// is done reading. Clone() can't wait for that, so it gets it from here.
+	reader.Lock()
+	reader.readerOptions.Style = &style
+	reader.Unlock()
+
 	reader.highlightingStyle <- style
 }
 
