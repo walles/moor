@@ -108,11 +108,12 @@ func TestReset(t *testing.T) {
 func TestFullAddDoesNotAllocate(t *testing.T) {
 	var s Summary
 	bigChunk := []byte(strings.Repeat("a", 16*1024))
+	smallChunk := []byte("small")
 	s.Add(bigChunk)
 
 	allocs := testing.AllocsPerRun(100, func() {
 		s.Add(bigChunk)
-		s.Add([]byte("small"))
+		s.Add(smallChunk)
 	})
 	assert.Equal(t, allocs, 0.0)
 }
