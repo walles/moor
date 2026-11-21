@@ -82,3 +82,27 @@ func TestReloadKeepsFilter(t *testing.T) {
 	rows = screen.waitForRow(t, "bepa2")
 	assert.Equal(t, rows[0], "bepa2", "Filter should survive reload")
 }
+
+// Pressing 'r' must reload even if we haven't finished reading the file yet
+func TestReloadWhileStillReading(t *testing.T) {
+	// More lines than the pager will have us read without scrolling, so that
+	// reading stays unfinished
+	lineCount := 2 * reader.DEFAULT_PAUSE_AFTER_LINES
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+	assert.Assert(t, !r.ReadingDone.Load(), "Test setup broken, reading should not be done")
+
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", lineCount)), 0o600))
+	typeRunes(t, screen, pagingDone, "r")
+
+	screen.waitForRow(t, "new0")
+}
