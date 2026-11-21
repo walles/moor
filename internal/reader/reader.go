@@ -153,6 +153,9 @@ type ReaderImpl struct {
 	// Set to true when this reader is discarded.
 	closed atomic.Bool
 
+	// Set to true when the file has been rewritten, see WantsReload()
+	reloadWanted atomic.Bool
+
 	// The stream we are reading from, if it can be closed at all. We own it, so
 	// we close it either once we're done reading it or when this reader is
 	// closed, whichever happens first.
@@ -609,6 +612,12 @@ func (reader *ReaderImpl) SetPauseAfterLines(lines int) {
 }
 
 func (reader *ReaderImpl) SetStyleForHighlighting(style chroma.Style) {
+	// Our reading goroutine picks the style up from the channel only once it
+	// is done reading. Clone() can't wait for that, so it gets it from here.
+	reader.Lock()
+	reader.readerOptions.Style = &style
+	reader.Unlock()
+
 	reader.highlightingStyle <- style
 }
 

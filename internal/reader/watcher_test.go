@@ -67,6 +67,20 @@ func waitForCondition(t *testing.T, condition func() bool, errMsg string) {
 	t.Fatalf("timed out: %s", errMsg)
 }
 
+// Wait for testMe to ask for a reload, then do what the pager would do and
+// return a fresh clone of it
+func waitForReload(t *testing.T, testMe *ReaderImpl) *ReaderImpl {
+	t.Helper()
+	waitForCondition(t, testMe.WantsReload, "waiting for a reload request")
+
+	clone, err := testMe.Clone()
+	assert.NilError(t, err)
+	t.Cleanup(clone.Close)
+	assert.NilError(t, clone.Wait())
+
+	return clone
+}
+
 func assertLines(t *testing.T, testMe *ReaderImpl, expectedLines ...string) {
 	t.Helper()
 	allLines := testMe.GetLines(linemetadata.Index{}, len(expectedLines)+10)
@@ -111,13 +125,7 @@ func TestReadShrunkFile(t *testing.T) {
 	err := os.WriteFile(file.Name(), []byte("New\n"), 0600)
 	assert.NilError(t, err)
 
-	waitForCondition(t, func() bool {
-		allLines := testMe.GetLines(linemetadata.Index{}, 10)
-		return len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "New"
-	}, "waiting for shrunk file to reload with 'New'")
-
-	assert.NilError(t, testMe.Wait())
-	assertLines(t, testMe, "New")
+	assertLines(t, waitForReload(t, testMe), "New")
 }
 
 // If people keep appending to the currently opened file we should display those
@@ -189,13 +197,7 @@ func TestReadRewrittenFile_Replaced(t *testing.T) {
 	err := os.WriteFile(file.Name(), []byte(replacementRow), 0600)
 	assert.NilError(t, err)
 
-	waitForCondition(t, func() bool {
-		allLines := testMe.GetLines(linemetadata.Index{}, 10)
-		return len(allLines.Lines) == 1 && allLines.Lines[0].Plain() == "Totally different data replaces the whole file"
-	}, "waiting for rewrite to reload")
-
-	assert.NilError(t, testMe.Wait())
-	assertLines(t, testMe, "Totally different data replaces the whole file")
+	assertLines(t, waitForReload(t, testMe), "Totally different data replaces the whole file")
 }
 
 // If a small file is appended to and then rewritten in place, starting with
@@ -215,8 +217,7 @@ func TestReadRewrittenFile_AfterAppend(t *testing.T) {
 	_, err = file.WriteAt([]byte("a\nc\nd\n"), 0)
 	assert.NilError(t, err)
 
-	waitForLineCount(t, testMe, 3)
-	assertLines(t, testMe, "a", "c", "d")
+	assertLines(t, waitForReload(t, testMe), "a", "c", "d")
 }
 
 // The first line of these is longer than the header we track, so only the
@@ -236,8 +237,7 @@ func TestReadRewrittenFile_SameStart(t *testing.T) {
 	_, err := file.WriteAt([]byte(replacementContents), 0)
 	assert.NilError(t, err)
 
-	waitForLineCount(t, testMe, 3)
-	assertLines(t, testMe, longFirstLine, "new", "longer")
+	assertLines(t, waitForReload(t, testMe), longFirstLine, "new", "longer")
 }
 
 // If another file is moved into place, starting with the same bytes and being
@@ -257,8 +257,7 @@ func TestReadReplacedFile_SameStart(t *testing.T) {
 	t.Cleanup(func() { _ = os.Remove(replacement) })
 	assert.NilError(t, os.Rename(replacement, file.Name()))
 
-	waitForLineCount(t, testMe, 3)
-	assertLines(t, testMe, longFirstLine, "new", "longer")
+	assertLines(t, waitForReload(t, testMe), longFirstLine, "new", "longer")
 }
 
 // Appending to a file must be taken for an append. Reloading would show the

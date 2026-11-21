@@ -503,17 +503,6 @@ func (p *Pager) ReloadCurrentReader() {
 	defer p.readerLock.Unlock()
 
 	current := p.views[p.currentView].reader
-	if !current.ReadingDone.Load() || !current.HighlightingDone.Load() {
-		// The reader's formatting options (like the Style) are fully populated only
-		// once the initial read/highlighting pass consumes them from its channels.
-		// If we clone the reader before this happens, we copy a nil style, and the
-		// cloned reader will deadlock forever waiting for a style it will never receive.
-		//
-		// So let's just ignore this request. This should clear up quickly, and
-		// if the user presses 'r' again the reload will go through.
-		return
-	}
-
 	clone, err := current.Clone()
 	if err != nil {
 		log.Warnf("Failed to clone reader for reloading: %v", err)
@@ -531,6 +520,28 @@ func (p *Pager) ReloadCurrentReader() {
 	select {
 	case p.readerSwitched <- struct{}{}:
 	default:
+	}
+}
+
+// Close the readers of all views. Readers replaced by reloading have been
+// closed already.
+func (p *Pager) CloseReaders() {
+	p.readerLock.Lock()
+	defer p.readerLock.Unlock()
+
+	for _, view := range p.views {
+		view.reader.Close()
+	}
+}
+
+// Reload the current reader if its file was rewritten on disk
+func (p *Pager) reloadCurrentReaderIfWanted() {
+	p.readerLock.Lock()
+	current := p.views[p.currentView].reader
+	p.readerLock.Unlock()
+
+	if current.WantsReload() {
+		p.ReloadCurrentReader()
 	}
 }
 
@@ -877,6 +888,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			return
 
 		case eventMoreLinesAvailable:
+			p.reloadCurrentReaderIfWanted()
 			p.scrollTowardsTargetLine()
 
 		case eventMaybeDone:

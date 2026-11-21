@@ -211,11 +211,11 @@ func pageFromReader(reader *internalReader.ReaderImpl, options Options) error {
 // false when the screen came from an external caller, since callers own the
 // lifecycle of screens they supply.
 func pageFromReaderWithScreen(reader *internalReader.ReaderImpl, screen twin.Screen, shouldCloseScreen bool, options Options) error {
-	// Closing the reader closes the stream it came from, which is what our
-	// callers promise their callers
-	defer reader.Close()
-
 	pager := internal.NewPager(reader)
+
+	// Closing the reader closes the stream it came from, which is what our
+	// callers promise their callers. Also closes any reloaded copies of it.
+	defer pager.CloseReaders()
 	pager.WrapLongLines = options.WrapLongLines
 	pager.ShowLineNumbers = !options.NoLineNumbers
 	pager.QuitIfOneScreen = options.QuitIfOneScreen

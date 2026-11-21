@@ -211,7 +211,7 @@ func NewFromTextForTesting(name string, text string) *ReaderImpl {
 	return returnMe
 }
 
-// Clone creates a new ReaderImpl using the same source file and options.
+// Clone creates a new ReaderImpl reading the same file, set up like this one.
 func (reader *ReaderImpl) Clone() (*ReaderImpl, error) {
 	if reader.FileName == nil {
 		return nil, nil // Ignore streams
@@ -220,7 +220,19 @@ func (reader *ReaderImpl) Clone() (*ReaderImpl, error) {
 	reader.RLock()
 	formatter := reader.formatter
 	options := reader.readerOptions
+	options.PauseAfterLines = ptr.To(reader.pauseAfterLines)
+	displayName := reader.DisplayName
 	reader.RUnlock()
 
-	return NewFromFilename(*reader.FileName, formatter, options)
+	clone, err := NewFromFilename(*reader.FileName, formatter, options)
+	if err != nil {
+		return nil, err
+	}
+
+	// Our name may have been changed after we were created
+	clone.Lock()
+	clone.DisplayName = displayName
+	clone.Unlock()
+
+	return clone, nil
 }

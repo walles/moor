@@ -28,6 +28,17 @@ func (reader *ReaderImpl) readStream(stream io.Reader, formatter chroma.Formatte
 	default:
 	}
 
+	if reader.closed.Load() {
+		// Nobody will look at our lines any more, so don't highlight them, and
+		// don't wait for a highlighting style that may never come
+		reader.HighlightingDone.Store(true)
+		select {
+		case reader.MaybeDone <- true:
+		default:
+		}
+		return
+	}
+
 	t0 := time.Now()
 	style := <-reader.highlightingStyle
 	options.Style = &style

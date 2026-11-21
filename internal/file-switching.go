@@ -49,6 +49,9 @@ func (p *Pager) switchToFile(newIndex int) {
 	p.filteringReader.SetBackingReader(p.views[newIndex].reader)
 	p.readerLock.Unlock()
 
+	// Before drawing anything, or we'll draw the old file contents
+	p.reloadCurrentReaderIfWanted()
+
 	entering := p.views[newIndex]
 	p.filter = entering.filter
 	if entering.horizontal != nil {
