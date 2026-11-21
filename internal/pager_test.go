@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"runtime"
@@ -873,4 +874,37 @@ func TestCloseReadersClosesReloadedReaders(t *testing.T) {
 	// A closed reader stops reading, paused or not
 	waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the reloaded reader to stop reading" })
 	assert.Assert(t, reloaded.GetLineCount() < lineCount, "Closed reader should not read to the end")
+}
+
+// Reaching the target line before there are enough lines after it to fill the
+// screen should not leave us above the target once the rest has arrived
+func TestScrollTowardsTargetLineWithFewLinesAfterIt(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	t.Cleanup(func() { _ = pipeWriter.Close() })
+	go func() {
+		_, _ = io.WriteString(pipeWriter, linesForTesting("x", 20))
+	}()
+	r, err := reader.NewFromStream("", pipeReader, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	t.Cleanup(r.Close)
+	waitUntil(t, func() bool { return r.GetLineCount() == 20 }, func() string { return "the first lines" })
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.mode = PagerModeViewing{pager: pager}
+
+	// Five lines after the target, more than that fit on the screen
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(15)))
+	pager.scrollTowardsTargetLine()
+	pager.renderIntoCells("")
+
+	_, err = io.WriteString(pipeWriter, linesForTesting("y", 20))
+	assert.NilError(t, err)
+	waitUntil(t, func() bool { return r.GetLineCount() == 40 }, func() string { return "the rest of the lines" })
+
+	// Like the main loop does when told about more lines
+	pager.scrollTowardsTargetLine()
+	pager.renderIntoCells("")
+
+	assert.Equal(t, pager.lineIndex().Index(), 15)
 }
