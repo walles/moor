@@ -2,6 +2,7 @@ package reader
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/chroma/v2"
+	"github.com/alecthomas/chroma/v2/formatters"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/styles"
 	"github.com/klauspost/compress/zstd"
@@ -224,4 +226,76 @@ func TestStreamClosedOnReaderClose(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("Writing to a closed reader's stream should fail, it blocked instead")
 	}
+}
+
+// Writes a Go source file with lineCount lines and returns its name
+func writeGoSource(t *testing.T, lineCount int) string {
+	t.Helper()
+
+	var source strings.Builder
+	source.WriteString("package main\n")
+	for i := range lineCount - 1 {
+		fmt.Fprintf(&source, "var x%d = %d\n", i, i)
+	}
+
+	fileName := path.Join(t.TempDir(), "source.go")
+	assert.NilError(t, os.WriteFile(fileName, []byte(source.String()), 0o600))
+	return fileName
+}
+
+func assertHighlighted(t *testing.T, testMe *ReaderImpl) {
+	t.Helper()
+
+	testMe.RLock()
+	defer testMe.RUnlock()
+	assert.Assert(t, len(testMe.lines) > 0)
+	assert.Assert(t, bytes.Contains(testMe.lines[0].raw, []byte("\x1b[")),
+		"Expected highlighting, got: %q", testMe.lines[0].raw)
+}
+
+// A clone made after the original has been highlighted is highlighted as well.
+func TestCloneOfHighlightedReaderIsHighlighted(t *testing.T) {
+	original, err := NewFromFilename(writeGoSource(t, 10), formatters.TTY16m, ReaderOptions{})
+	assert.NilError(t, err)
+	defer original.Close()
+	original.SetStyleForHighlighting(*styles.Get("native"))
+	assert.NilError(t, original.Wait())
+	assertHighlighted(t, original)
+
+	clone, err := original.Clone()
+	assert.NilError(t, err)
+	defer clone.Close()
+
+	assert.NilError(t, clone.Wait())
+	assertHighlighted(t, clone)
+}
+
+// A clone made while the original is still reading is highlighted once it is
+// done reading. The original gets its style before it is done reading, but only
+// looks at it afterwards, so the style must not get lost when cloning in
+// between.
+//
+// If this test hangs, the clone is waiting for a style nobody is going to send
+// it.
+func TestCloneOfReaderStillReadingIsHighlighted(t *testing.T) {
+	// Pausing makes sure the original stays unfinished, at least until we call
+	// Wait() on it, which we don't
+	pauseAfterLines := 2
+	original, err := NewFromFilename(writeGoSource(t, 10), formatters.TTY16m, ReaderOptions{
+		PauseAfterLines: &pauseAfterLines,
+	})
+	assert.NilError(t, err)
+	defer original.Close()
+	original.SetStyleForHighlighting(*styles.Get("native"))
+
+	clone, err := original.Clone()
+	assert.NilError(t, err)
+	defer clone.Close()
+
+	// The clone inherits the pause limit. Wait() bumps it whenever the clone
+	// pauses.
+	assert.NilError(t, clone.Wait())
+	assertHighlighted(t, clone)
+
+	assert.Assert(t, !original.ReadingDone.Load(), "Test setup broken, original should still be reading")
 }
