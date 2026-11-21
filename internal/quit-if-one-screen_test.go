@@ -66,10 +66,15 @@ func TestQuitIfOneScreenPaintsNothingWhileHighlighting(t *testing.T) {
 	testReader.HighlightingDone.Store(true)
 	testReader.MaybeDone <- true
 
-	select {
-	case <-pagingDone:
-	case <-time.After(pagerTimeout):
-		t.Fatal("Pager should have quit, two lines fit on ten")
+	stillWaiting := time.NewTicker(stillWaitingInterval)
+	defer stillWaiting.Stop()
+	for quit := false; !quit; {
+		select {
+		case <-pagingDone:
+			quit = true
+		case <-stillWaiting.C:
+			reportStillWaiting(t, "the pager to quit, two lines fit on ten")
+		}
 	}
 }
 

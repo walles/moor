@@ -1,6 +1,9 @@
 package internal
 
 import (
+	"fmt"
+	"os"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,9 +14,16 @@ import (
 	"github.com/walles/twin"
 )
 
-// How long to wait for the pager to get somewhere. Long enough that exceeding it
-// means the pager is stuck rather than slow.
-const pagerTimeout = time.Second
+// The wait helpers here have no deadline, "go test -timeout" ends stuck tests.
+// Until then, they report what they are waiting for this often.
+const stillWaitingInterval = 5 * time.Second
+
+// Print to stderr rather than using t.Logf(). Without -v, the test log of a test
+// that is still running is lost when "go test -timeout" kills it.
+func reportStillWaiting(t *testing.T, format string, args ...any) {
+	t.Helper()
+	fmt.Fprintf(os.Stderr, "%s: still waiting for %s\n", t.Name(), fmt.Sprintf(format, args...))
+}
 
 // A screen that can run the pager main loop, and that counts paints and records
 // what was painted.
@@ -68,38 +78,34 @@ func (screen *pagingLoopScreen) shownRows() []string {
 	return screen.frame
 }
 
+// Wait until condition is true, however long that takes. waitingFor() says what
+// we are waiting for, and is called only when reporting that we still are.
+func waitUntil(t *testing.T, condition func() bool, waitingFor func() string) {
+	t.Helper()
+
+	nextReport := time.Now().Add(stillWaitingInterval)
+	for !condition() {
+		if time.Now().After(nextReport) {
+			reportStillWaiting(t, "%s", waitingFor())
+			nextReport = time.Now().Add(stillWaitingInterval)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // Wait until some shown row says exactly this, then return all shown rows
 func (screen *pagingLoopScreen) waitForRow(t *testing.T, want string) []string {
 	t.Helper()
 
-	giveUp := time.Now().Add(pagerTimeout)
-	for time.Now().Before(giveUp) {
-		rows := screen.shownRows()
-		for _, row := range rows {
-			if row == want {
-				return rows
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	var rows []string
+	waitUntil(t, func() bool {
+		rows = screen.shownRows()
+		return slices.Contains(rows, want)
+	}, func() string {
+		return fmt.Sprintf("%q on screen, last frame:\n%s", want, strings.Join(rows, "\n"))
+	})
 
-	t.Fatalf("Never saw %q on screen, last frame:\n%s", want, strings.Join(screen.shownRows(), "\n"))
-	return nil
-}
-
-// Wait until some shown row says exactly this, however long that takes.
-//
-// For things that take an unknown amount of time, like the reader noticing a
-// file change. If this hangs, the pager never got there.
-func (screen *pagingLoopScreen) waitForRowForever(want string) {
-	for {
-		for _, row := range screen.shownRows() {
-			if row == want {
-				return
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	return rows
 }
 
 // Start paging in the background, and stop paging again when the test ends.
@@ -133,18 +139,24 @@ func startPagingInBackground(t *testing.T, pager *Pager, screen *pagingLoopScree
 
 // Hand an event to the pager, and wait for the pager to take it.
 //
-// Fails the test rather than hanging if the pager is not taking events.
+// Fails the test if the pager quits instead.
 func handEvent(t *testing.T, screen *pagingLoopScreen, pagingDone chan struct{}, event twin.Event) {
 	t.Helper()
 
-	select {
-	case screen.events <- event:
+	stillWaiting := time.NewTicker(stillWaitingInterval)
+	defer stillWaiting.Stop()
 
-	case <-pagingDone:
-		t.Fatal("Pager quit instead of taking our event")
+	for {
+		select {
+		case screen.events <- event:
+			return
 
-	case <-time.After(pagerTimeout):
-		t.Fatal("Pager never got as far as reading events")
+		case <-pagingDone:
+			t.Fatal("Pager quit instead of taking our event")
+
+		case <-stillWaiting.C:
+			reportStillWaiting(t, "the pager to take event %#v", event)
+		}
 	}
 }
 

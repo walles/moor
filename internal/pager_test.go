@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -849,8 +848,6 @@ func TestReloadReadsToTheEndWhenFollowing(t *testing.T) {
 	// what it has been told to read
 	reloaded := pager.views[pager.currentView].reader
 	defer reloaded.Close()
-	for !reloaded.ReadingDone.Load() {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the reloaded file to be read to the end" })
 	assert.Equal(t, reloaded.GetLineCount(), lineCount)
 }

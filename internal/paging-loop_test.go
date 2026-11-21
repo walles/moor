@@ -120,7 +120,7 @@ func TestRewrittenFileIsReloaded(t *testing.T) {
 	// Shorter, so that this must be a reload rather than an append
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 2)), 0o600))
 
-	screen.waitForRowForever("new0")
+	screen.waitForRow(t, "new0")
 }
 
 // A file rewritten on disk while we were looking at another one must show up
@@ -142,9 +142,7 @@ func TestRewrittenFileIsReloadedWhenSwitchedTo(t *testing.T) {
 
 	// Shorter, so that this must be a reload rather than an append
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 2)), 0o600))
-	for !b.WantsReload() {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitUntil(t, b.WantsReload, func() string { return "the rewritten file to be noticed" })
 
 	typeRunes(t, screen, pagingDone, ":n")
 	screen.waitForRow(t, "new0")
