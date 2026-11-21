@@ -258,3 +258,49 @@ func TestReloadDuringHelpKeepsPosition(t *testing.T) {
 	typeRunes(t, screen, pagingDone, "q") // Leave help
 	screen.waitForTopRow(t, "new89999")
 }
+
+// A file rewritten on disk while we are in some other mode than viewing should
+// take us back to where we were once we're back to viewing
+func TestRewrittenFileInOtherModeKeepsPosition(t *testing.T) {
+	for _, mode := range []struct {
+		name  string
+		enter string
+		leave twin.KeyCode
+	}{
+		{"filter", "&", twin.KeyEnter},
+		{"go to line", "g", twin.KeyEscape},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "lines.txt")
+			assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100_000)), 0o600))
+			pager, screen, pagingDone := startPagingAtLine(t, file, 90_000)
+			waitForWatching(t, pager)
+
+			pager.readerLock.Lock()
+			original := pager.views[pager.currentView].reader
+			pager.readerLock.Unlock()
+
+			typeRunes(t, screen, pagingDone, mode.enter)
+
+			// Shorter, so that this must be a reload rather than an append
+			assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 95_000)), 0o600))
+			var reloaded *reader.ReaderImpl
+			waitUntil(t, func() bool {
+				pager.readerLock.Lock()
+				defer pager.readerLock.Unlock()
+				reloaded = pager.views[pager.currentView].reader
+				return reloaded != original
+			}, func() string { return "the rewritten file to be reloaded" })
+			waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the rewritten file to be read" })
+
+			// The background goroutine throttles more-lines notifications for
+			// 200ms. Wait for any last one to be handled, or that one could
+			// take us to the right place in viewing mode, and this test would
+			// pass whether or not leaving the mode does.
+			time.Sleep(300 * time.Millisecond)
+
+			handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: mode.leave})
+			screen.waitForTopRow(t, "new89999")
+		})
+	}
+}
