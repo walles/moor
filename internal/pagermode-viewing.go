@@ -112,8 +112,10 @@ func (m PagerModeViewing) onRune(char rune) {
 			break
 		}
 
+		lineIndex := p.lineIndex()
 		p.preHelpState = &_PreHelpState{
 			scrollPosition: p.scrollPosition,
+			lineIndex:      lineIndex,
 			horizontal:     p.getHorizontalPosition(),
 			targetLine:     p.TargetLine,
 		}

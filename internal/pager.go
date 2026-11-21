@@ -220,6 +220,7 @@ type bookmark struct {
 
 type _PreHelpState struct {
 	scrollPosition scrollPosition
+	lineIndex      *linemetadata.Index // Of scrollPosition, which we can't compute while showing help
 	horizontal     horizontalPosition
 	targetLine     *linemetadata.Index
 }
@@ -498,7 +499,44 @@ func (p *Pager) Reader() reader.Reader {
 	return &p.filteringReader
 }
 
+// Reload the current file from disk, and scroll back to where we were once the
+// reloaded file has enough lines.
 func (p *Pager) ReloadCurrentReader() {
+	// Where in the file we are, so that we can get back there
+	var position *linemetadata.Index
+	if p.isShowingHelp {
+		position = p.preHelpState.lineIndex
+	} else if p.TargetLine == nil {
+		position = p.lineIndex()
+	}
+
+	if !p.swapInReloadedReader() {
+		return
+	}
+
+	if position == nil {
+		// Already on our way somewhere, or nothing to get back to
+		return
+	}
+
+	if !p.isShowingHelp {
+		p.setTargetLine(position)
+		return
+	}
+
+	// Leaving help takes us here
+	if p.preHelpState.targetLine == nil {
+		p.preHelpState.targetLine = position
+	}
+}
+
+// Replace the current reader with a fresh one reading the same file. Returns
+// false if that didn't happen.
+//
+// Doesn't touch the scroll position, see ReloadCurrentReader() for that. Kept
+// separate from it because setTargetLine() takes readerLock, which we hold
+// here.
+func (p *Pager) swapInReloadedReader() bool {
 	p.readerLock.Lock()
 	defer p.readerLock.Unlock()
 
@@ -506,11 +544,11 @@ func (p *Pager) ReloadCurrentReader() {
 	clone, err := current.Clone()
 	if err != nil {
 		log.Warnf("Failed to clone reader for reloading: %v", err)
-		return
+		return false
 	}
 	if clone == nil {
 		// Nil indicates it's a stream or couldn't be cloned
-		return
+		return false
 	}
 
 	current.Close()
@@ -521,6 +559,8 @@ func (p *Pager) ReloadCurrentReader() {
 	case p.readerSwitched <- struct{}{}:
 	default:
 	}
+
+	return true
 }
 
 // Close the readers of all views. Readers replaced by reloading have been

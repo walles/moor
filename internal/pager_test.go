@@ -863,6 +863,7 @@ func TestCloseReadersClosesReloadedReaders(t *testing.T) {
 	assert.NilError(t, err)
 
 	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
 	pager.ReloadCurrentReader()
 	reloaded := pager.views[pager.currentView].reader
 	assert.Assert(t, reloaded != r, "Test setup broken, reloading should replace the reader")
