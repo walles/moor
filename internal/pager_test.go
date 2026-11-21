@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -824,4 +825,32 @@ func TestLeavingHelpRestoresLineNumbers(t *testing.T) {
 	assert.Assert(t, !pager.isShowingHelp)
 	assert.Equal(t, pager.leftColumnZeroBased, 16)
 	assert.Assert(t, !pager.showLineNumbers)
+}
+
+// When following, a reloaded file must be read all the way to the end, just
+// like the file it replaces.
+//
+// If this test hangs, the new reader is stuck waiting for someone to ask for
+// more lines.
+func TestReloadReadsToTheEndWhenFollowing(t *testing.T) {
+	// More lines than readers read by default
+	lineCount := 2 * reader.DEFAULT_PAUSE_AFTER_LINES
+	file := path.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("x", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.setTargetLine(ptr.To(linemetadata.IndexMax())) // Follow
+	pager.ReloadCurrentReader()
+
+	// Without a running pager, nobody asks the new reader for more lines than
+	// what it has been told to read
+	reloaded := pager.views[pager.currentView].reader
+	defer reloaded.Close()
+	for !reloaded.ReadingDone.Load() {
+		time.Sleep(10 * time.Millisecond)
+	}
+	assert.Equal(t, reloaded.GetLineCount(), lineCount)
 }
