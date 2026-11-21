@@ -500,22 +500,27 @@ func (p *Pager) Reader() reader.Reader {
 
 func (p *Pager) ReloadCurrentReader() {
 	p.readerLock.Lock()
-	defer p.readerLock.Unlock()
-
 	current := p.views[p.currentView].reader
 	clone, err := current.Clone()
 	if err != nil {
+		p.readerLock.Unlock()
 		log.Warnf("Failed to clone reader for reloading: %v", err)
 		return
 	}
 	if clone == nil {
 		// Nil indicates it's a stream or couldn't be cloned
+		p.readerLock.Unlock()
 		return
 	}
 
 	current.Close()
 	p.views[p.currentView].reader = clone
 	p.filteringReader.SetBackingReader(clone)
+	p.readerLock.Unlock()
+
+	// Otherwise the new reader reads only as far as readers do by default, and
+	// then only a bit further each time we show lines close to its end
+	p.tellReaderAboutTargetLine()
 
 	select {
 	case p.readerSwitched <- struct{}{}:
@@ -596,10 +601,6 @@ func (p *Pager) scrollTowardsTargetLine() {
 // Except for setting TargetLine, this method also syncs with the reader so that
 // the reader knows how many lines it needs to fetch.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
-	p.readerLock.Lock()
-	r := p.views[p.currentView].reader
-	p.readerLock.Unlock()
-
 	log.Trace("Pager: Setting target line to ", targetLine, "...")
 	p.TargetLine = targetLine
 
@@ -607,6 +608,16 @@ func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 	// earlier scroll down
 	p.pendingFollowCheck = false
 
+	p.tellReaderAboutTargetLine()
+}
+
+// Tell the current reader how far to read to get to the target line
+func (p *Pager) tellReaderAboutTargetLine() {
+	p.readerLock.Lock()
+	r := p.views[p.currentView].reader
+	p.readerLock.Unlock()
+
+	targetLine := p.TargetLine
 	if targetLine == nil {
 		// No target, just do your thing
 		r.SetPauseAfterLines(reader.DEFAULT_PAUSE_AFTER_LINES)
