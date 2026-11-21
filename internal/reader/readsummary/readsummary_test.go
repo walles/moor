@@ -102,3 +102,17 @@ func TestReset(t *testing.T) {
 	assert.Equal(t, string(s.Header()), "World")
 	assert.Equal(t, string(s.Trailer()), "World")
 }
+
+// Reading large files calls Add() for every chunk, so once the header and the
+// trailer are full, it shouldn't allocate anything
+func TestFullAddDoesNotAllocate(t *testing.T) {
+	var s Summary
+	bigChunk := []byte(strings.Repeat("a", 16*1024))
+	s.Add(bigChunk)
+
+	allocs := testing.AllocsPerRun(100, func() {
+		s.Add(bigChunk)
+		s.Add([]byte("small"))
+	})
+	assert.Equal(t, allocs, 0.0)
+}

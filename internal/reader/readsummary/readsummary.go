@@ -51,15 +51,21 @@ func (s *Summary) Add(chunk []byte) {
 	fitsInHeader := min(headerRoom, len(chunk))
 	s.header = append(s.header, chunk[:fitsInHeader]...)
 
-	// Keep only the last bytes in the trailer, start by adding at most
-	// trailerCapacity bytes to the trailer...
-	fitsInTrailer := min(trailerCapacity, len(chunk))
-	s.trailer = append(s.trailer, chunk[len(chunk)-fitsInTrailer:]...)
-
-	if len(s.trailer) > trailerCapacity {
-		// ... but we overshot, remove the oldest bytes from the start
-		s.trailer = s.trailer[len(s.trailer)-trailerCapacity:]
+	// Keep only the last bytes in the trailer, in one buffer we never
+	// reallocate. Start with the last bytes of the chunk...
+	if s.trailer == nil {
+		s.trailer = make([]byte, 0, trailerCapacity)
 	}
+	fitsInTrailer := min(trailerCapacity, len(chunk))
+	newTrailerBytes := chunk[len(chunk)-fitsInTrailer:]
+
+	// ... make room for them by moving the newest old bytes we keep down to
+	// the start of the buffer...
+	keep := min(len(s.trailer), trailerCapacity-len(newTrailerBytes))
+	copy(s.trailer, s.trailer[len(s.trailer)-keep:])
+
+	// ... and add the new bytes after them
+	s.trailer = append(s.trailer[:keep], newTrailerBytes...)
 }
 
 // Reset forgets everything added so far.
@@ -69,7 +75,7 @@ func (s *Summary) Reset() {
 
 	s.count = 0
 	s.header = nil
-	s.trailer = nil
+	s.trailer = s.trailer[:0]
 	s.endedWithNewline = false
 }
 
