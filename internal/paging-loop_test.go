@@ -155,3 +155,84 @@ func TestRewrittenFileIsReloadedWhenSwitchedTo(t *testing.T) {
 			"Stale content shown after switching:\n%s", strings.Join(frame, "\n"))
 	}
 }
+
+// Open a file with old lines and go to the given line
+func startPagingAtLine(t *testing.T, file string, lineNumber int) (*Pager, *pagingLoopScreen, chan struct{}) {
+	t.Helper()
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	typeRunes(t, screen, pagingDone, fmt.Sprintf("g%d", lineNumber))
+	handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: twin.KeyEnter})
+	screen.waitForRow(t, fmt.Sprintf("old%d", lineNumber-1))
+
+	// Readers watch their files for changes only after reading all of them
+	waitUntil(t, r.HighlightingDone.Load, func() string { return "the file to be read to the end" })
+
+	return pager, screen, pagingDone
+}
+
+// Wait until the top row says exactly this
+func (screen *pagingLoopScreen) waitForTopRow(t *testing.T, want string) {
+	t.Helper()
+
+	var rows []string
+	waitUntil(t, func() bool {
+		rows = screen.shownRows()
+		return len(rows) > 0 && rows[0] == want
+	}, func() string {
+		return fmt.Sprintf("%q at the top, last frame:\n%s", want, strings.Join(rows, "\n"))
+	})
+}
+
+// After reloading, we should be where we were before
+func TestReloadKeepsPosition(t *testing.T) {
+	for _, how := range []string{"rewritten on disk", "r pressed"} {
+		t.Run(how, func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "lines.txt")
+			assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100_000)), 0o600))
+			_, screen, pagingDone := startPagingAtLine(t, file, 90_000)
+
+			// Shorter, so that this must be a reload rather than an append
+			assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 95_000)), 0o600))
+			if how == "r pressed" {
+				typeRunes(t, screen, pagingDone, "r")
+			}
+
+			screen.waitForTopRow(t, "new89999")
+		})
+	}
+}
+
+// A reload while the help screen is up should take us back to where we were
+// when we leave the help screen
+func TestReloadDuringHelpKeepsPosition(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100_000)), 0o600))
+	pager, screen, pagingDone := startPagingAtLine(t, file, 90_000)
+
+	pager.readerLock.Lock()
+	original := pager.views[pager.currentView].reader
+	pager.readerLock.Unlock()
+
+	typeRunes(t, screen, pagingDone, "h")
+	screen.waitForRow(t, "Miscellaneous")
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 95_000)), 0o600))
+	waitUntil(t, func() bool {
+		pager.readerLock.Lock()
+		defer pager.readerLock.Unlock()
+		return pager.views[pager.currentView].reader != original
+	}, func() string { return "the rewritten file to be reloaded" })
+
+	typeRunes(t, screen, pagingDone, "q") // Leave help
+	screen.waitForTopRow(t, "new89999")
+}
