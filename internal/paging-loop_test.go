@@ -173,9 +173,6 @@ func startPagingAtLine(t *testing.T, file string, lineNumber int) (*Pager, *pagi
 	handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: twin.KeyEnter})
 	screen.waitForRow(t, fmt.Sprintf("old%d", lineNumber-1))
 
-	// Readers watch their files for changes only after reading all of them
-	waitUntil(t, r.HighlightingDone.Load, func() string { return "the file to be read to the end" })
-
 	return pager, screen, pagingDone
 }
 
@@ -192,23 +189,47 @@ func (screen *pagingLoopScreen) waitForTopRow(t *testing.T, want string) {
 	})
 }
 
-// After reloading, we should be where we were before
+// Readers watch their files for changes only after reading all of them
+func waitForWatching(t *testing.T, pager *Pager) {
+	t.Helper()
+
+	pager.readerLock.Lock()
+	r := pager.views[pager.currentView].reader
+	pager.readerLock.Unlock()
+
+	waitUntil(t, r.HighlightingDone.Load, func() string { return "the file to be read to the end" })
+}
+
+// After the file is rewritten on disk, we should be where we were before
+func TestRewrittenFileKeepsPosition(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100_000)), 0o600))
+	pager, screen, _ := startPagingAtLine(t, file, 90_000)
+	waitForWatching(t, pager)
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 95_000)), 0o600))
+
+	screen.waitForTopRow(t, "new89999")
+}
+
+// After pressing 'r', we should be where we were before
 func TestReloadKeepsPosition(t *testing.T) {
-	for _, how := range []string{"rewritten on disk", "r pressed"} {
-		t.Run(how, func(t *testing.T) {
-			file := filepath.Join(t.TempDir(), "lines.txt")
-			assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100_000)), 0o600))
-			_, screen, pagingDone := startPagingAtLine(t, file, 90_000)
+	// So many lines that we won't read to the end, and thus won't watch the
+	// file for changes. That leaves 'r' as the only way to reload it.
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 200_000)), 0o600))
+	pager, screen, pagingDone := startPagingAtLine(t, file, 90_000)
 
-			// Shorter, so that this must be a reload rather than an append
-			assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 95_000)), 0o600))
-			if how == "r pressed" {
-				typeRunes(t, screen, pagingDone, "r")
-			}
+	pager.readerLock.Lock()
+	original := pager.views[pager.currentView].reader
+	pager.readerLock.Unlock()
+	assert.Assert(t, !original.ReadingDone.Load(), "Test setup broken, reading should not be done")
 
-			screen.waitForTopRow(t, "new89999")
-		})
-	}
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 200_000)), 0o600))
+	typeRunes(t, screen, pagingDone, "r")
+
+	screen.waitForTopRow(t, "new89999")
 }
 
 // A reload while the help screen is up should take us back to where we were
@@ -217,6 +238,7 @@ func TestReloadDuringHelpKeepsPosition(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "lines.txt")
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100_000)), 0o600))
 	pager, screen, pagingDone := startPagingAtLine(t, file, 90_000)
+	waitForWatching(t, pager)
 
 	pager.readerLock.Lock()
 	original := pager.views[pager.currentView].reader
