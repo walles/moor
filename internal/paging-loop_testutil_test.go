@@ -114,7 +114,8 @@ func (screen *pagingLoopScreen) waitForRow(t *testing.T, want string) []string {
 //
 // Stopping matters even for tests that expect the pager to quit on its own: a
 // pager left running keeps painting on its spinner ticks for as long as the test
-// binary lives.
+// binary lives. Same thing with readers left open, they keep tailing their
+// files.
 func startPagingInBackground(t *testing.T, pager *Pager, screen *pagingLoopScreen) chan struct{} {
 	t.Helper()
 	isolateStyles(t)
@@ -132,6 +133,7 @@ func startPagingInBackground(t *testing.T, pager *Pager, screen *pagingLoopScree
 		}
 
 		<-pagingDone
+		pager.CloseReaders()
 	})
 
 	return pagingDone

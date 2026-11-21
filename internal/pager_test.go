@@ -851,3 +851,25 @@ func TestReloadReadsToTheEndWhenFollowing(t *testing.T) {
 	waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the reloaded file to be read to the end" })
 	assert.Equal(t, reloaded.GetLineCount(), lineCount)
 }
+
+func TestCloseReadersClosesReloadedReaders(t *testing.T) {
+	// More lines than readers read by default, so that the reloaded reader
+	// pauses rather than finishing on its own
+	lineCount := 2 * reader.DEFAULT_PAUSE_AFTER_LINES
+	file := path.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("x", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ReloadCurrentReader()
+	reloaded := pager.views[pager.currentView].reader
+	assert.Assert(t, reloaded != r, "Test setup broken, reloading should replace the reader")
+
+	pager.CloseReaders()
+
+	// A closed reader stops reading, paused or not
+	waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the reloaded reader to stop reading" })
+	assert.Assert(t, reloaded.GetLineCount() < lineCount, "Closed reader should not read to the end")
+}

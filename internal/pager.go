@@ -523,6 +523,17 @@ func (p *Pager) ReloadCurrentReader() {
 	}
 }
 
+// Close the readers of all views. Readers replaced by reloading have been
+// closed already.
+func (p *Pager) CloseReaders() {
+	p.readerLock.Lock()
+	defer p.readerLock.Unlock()
+
+	for _, view := range p.views {
+		view.reader.Close()
+	}
+}
+
 // Reload the current reader if its file was rewritten on disk
 func (p *Pager) reloadCurrentReaderIfWanted() {
 	p.readerLock.Lock()
