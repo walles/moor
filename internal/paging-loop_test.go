@@ -165,6 +165,7 @@ func startPagingAtLine(t *testing.T, file string, lineNumber int) (*Pager, *pagi
 
 	pager := NewPager(r)
 	pager.ShowLineNumbers = false
+	pager.searchHistory = &SearchHistory{} // No file backing, keep this test disk-free
 	screen := newPagingLoopScreen(20, 10)
 	pagingDone := startPagingInBackground(t, pager, screen)
 	screen.waitForRow(t, "old0")
@@ -303,4 +304,44 @@ func TestRewrittenFileInOtherModeKeepsPosition(t *testing.T) {
 			screen.waitForTopRow(t, "new89999")
 		})
 	}
+}
+
+// Like linesForTesting(), but every 100th line says "hit"
+func linesWithHits(prefix string, count int) string {
+	var lines strings.Builder
+	for i := range count {
+		if i%100 == 50 {
+			fmt.Fprintf(&lines, "%shit%d\n", prefix, i)
+		} else {
+			fmt.Fprintf(&lines, "%s%d\n", prefix, i)
+		}
+	}
+	return lines.String()
+}
+
+// Reloading with a filter active should take us back to where we were in the
+// filtered lines, even if the filter matches only a few lines
+func TestRewrittenFileKeepsFilteredPosition(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesWithHits("old", 100_000)), 0o600))
+
+	// Far enough down that we read all lines, so that we watch the file for
+	// changes
+	pager, screen, pagingDone := startPagingAtLine(t, file, 90_000)
+	waitForWatching(t, pager)
+
+	typeRunes(t, screen, pagingDone, "&hit")
+	handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: twin.KeyEnter})
+	screen.waitForRow(t, "oldhit99950")
+
+	// Filtered line 800 is unfiltered line 79951. Reading 50k unfiltered lines
+	// gets us only 500 filtered ones.
+	typeRunes(t, screen, pagingDone, "g800")
+	handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: twin.KeyEnter})
+	screen.waitForTopRow(t, "oldhit79950")
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesWithHits("new", 95_000)), 0o600))
+
+	screen.waitForTopRow(t, "newhit79950")
 }
