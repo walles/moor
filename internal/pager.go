@@ -676,6 +676,13 @@ func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 		return
 	}
 
+	if p.filter.Active() {
+		// The target is an index into the filtered lines. We can't tell how
+		// many unfiltered lines we need to get there, so read all of them.
+		r.SetPauseAfterLines(math.MaxInt)
+		return
+	}
+
 	// Set the target with some lookahead to avoid fetching too few lines.
 	targetValue := targetLine.Index() + reader.DEFAULT_PAUSE_AFTER_LINES/2
 	if targetValue < targetLine.Index() {
