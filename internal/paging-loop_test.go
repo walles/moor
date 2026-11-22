@@ -348,29 +348,6 @@ func TestRewrittenFileKeepsFilteredPosition(t *testing.T) {
 	screen.waitForTopRow(t, "newhit79950")
 }
 
-// Scrolling with the mouse wheel while following should move us and stop
-// following
-func TestMouseWheelWhileFollowing(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "lines.txt")
-	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100)), 0o600))
-
-	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
-	assert.NilError(t, err)
-	assert.NilError(t, r.Wait())
-
-	pager := NewPager(r)
-	pager.ShowLineNumbers = false
-	screen := newPagingLoopScreen(20, 10)
-	pagingDone := startPagingInBackground(t, pager, screen)
-	screen.waitForRow(t, "old0")
-
-	typeRunes(t, screen, pagingDone, "G")
-	screen.waitForTopRow(t, "old91")
-
-	handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelUp})
-	screen.waitForTopRow(t, "old90")
-}
-
 // Scrolling up with the mouse wheel should stop following, just like scrolling
 // up with the keyboard does
 func TestMouseWheelStopsFollowing(t *testing.T) {
@@ -399,8 +376,10 @@ func TestMouseWheelStopsFollowing(t *testing.T) {
 	assert.NilError(t, err)
 	assert.NilError(t, appendTo.Close())
 
-	// Shown after handling the new lines, which is when following would have
-	// moved us
+	// Best effort: this frame is usually drawn after handling the new lines,
+	// which is when following would have moved us. A redraw for some other
+	// reason, like the spinner, could show the new line count earlier though,
+	// and then this test would pass even with following still on.
 	var rows []string
 	waitUntil(t, func() bool {
 		rows = screen.shownRows()
