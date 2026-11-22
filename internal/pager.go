@@ -510,8 +510,29 @@ func (p *Pager) ReloadCurrentReader() {
 		position = p.lineIndex()
 	}
 
-	if !p.swapInReloadedReader() {
+	p.readerLock.Lock()
+	current := p.views[p.currentView].reader
+	p.readerLock.Unlock()
+
+	clone, err := current.Clone()
+	if err != nil {
+		log.Warnf("Failed to clone reader for reloading: %v", err)
 		return
+	}
+	if clone == nil {
+		// Nil indicates it's a stream or couldn't be cloned
+		return
+	}
+
+	p.readerLock.Lock()
+	p.views[p.currentView].reader = clone
+	p.readerLock.Unlock()
+	p.filteringReader.SetBackingReader(clone)
+	current.Close()
+
+	select {
+	case p.readerSwitched <- struct{}{}:
+	default:
 	}
 
 	if position == nil {
@@ -521,46 +542,10 @@ func (p *Pager) ReloadCurrentReader() {
 
 	if !p.isShowingHelp {
 		p.setTargetLine(position)
-		return
-	}
-
-	// Leaving help takes us here
-	if p.preHelpState.targetLine == nil {
+	} else if p.preHelpState.targetLine == nil {
+		// Leaving help takes us here
 		p.preHelpState.targetLine = position
 	}
-}
-
-// Replace the current reader with a fresh one reading the same file. Returns
-// false if that didn't happen.
-//
-// Doesn't touch the scroll position, see ReloadCurrentReader() for that. Kept
-// separate from it because setTargetLine() takes readerLock, which we hold
-// here.
-func (p *Pager) swapInReloadedReader() bool {
-	p.readerLock.Lock()
-	defer p.readerLock.Unlock()
-
-	current := p.views[p.currentView].reader
-	clone, err := current.Clone()
-	if err != nil {
-		log.Warnf("Failed to clone reader for reloading: %v", err)
-		return false
-	}
-	if clone == nil {
-		// Nil indicates it's a stream or couldn't be cloned
-		return false
-	}
-
-	current.Close()
-	p.views[p.currentView].reader = clone
-	p.filteringReader.SetBackingReader(clone)
-
-	select {
-	case p.readerSwitched <- struct{}{}:
-	default:
-	}
-
-	return true
 }
 
 // Close the readers of all views. Readers replaced by reloading have been
