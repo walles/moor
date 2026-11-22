@@ -24,8 +24,8 @@ type FilteringReader struct {
 	// including if it is set to nil.
 	Filter *search.Search
 
-	// Protects filteredLinesCache, unfilteredLineCountWhenCaching, and
-	// filterPatternWhenCaching.
+	// Protects filteredLinesCache, unfilteredLineCountWhenCaching,
+	// lastLineWhenCaching and filterWhenCaching.
 	lock sync.Mutex
 
 	// nil means no filtering has happened yet
@@ -36,6 +36,11 @@ type FilteringReader struct {
 	// rebuilt.
 	unfilteredLineCountWhenCaching int
 
+	// The reader's last line when we filtered. Bytes arriving for a last line
+	// without a trailing newline replace it with a longer one, without changing
+	// the line count. If this doesn't match, our cache needs to be rebuilt.
+	lastLineWhenCaching *reader.Line
+
 	// This is the pattern that was used when we cached the lines. If it
 	// doesn't match the current pattern, then our cache needs to be rebuilt.
 	filterWhenCaching search.Search
@@ -43,25 +48,22 @@ type FilteringReader struct {
 
 // Please hold the lock when calling this method.
 //
-// This method requires f.Filter.Active() to be true on entry.
-func (f *FilteringReader) rebuildCache() {
-	filter := *f.Filter
-	if !filter.Active() {
-		panic("Rebuilding cache requires an active filter")
-	}
-
+// filter must be active.
+func (f *FilteringReader) rebuildCache(filter search.Search) {
 	t0 := time.Now()
 
 	cache := make([]reader.NumberedLine, 0)
 
-	// Mark cache base conditions
-	f.unfilteredLineCountWhenCaching = f.BackingReader.GetLineCount()
+	// Mark cache base conditions. Get the last line before filtering, so that
+	// if it grows while we filter, we'll notice next time.
+	numLines := f.BackingReader.GetLineCount()
+	f.unfilteredLineCountWhenCaching = numLines
+	f.lastLineWhenCaching = lastLine(f.BackingReader, numLines)
 	f.filterWhenCaching = filter
 
 	// Repopulate the cache
 	resultIndex := 0
 
-	numLines := f.BackingReader.GetLineCount()
 	if numLines == 0 {
 		f.filteredLinesCache = &cache
 		log.Debugf("Filtered out 0/0 lines in %s", time.Since(t0))
@@ -118,37 +120,12 @@ func (f *FilteringReader) rebuildCache() {
 		numLines-len(cache), numLines, time.Since(t0), numWorkers, t1.Sub(t0))
 }
 
-func (f *FilteringReader) getAllLines() []reader.NumberedLine {
-	f.lock.Lock()
-	defer f.lock.Unlock()
-
-	if f.filteredLinesCache == nil {
-		f.rebuildCache()
-		return *f.filteredLinesCache
-	}
-
-	if f.unfilteredLineCountWhenCaching != f.BackingReader.GetLineCount() {
-		f.rebuildCache()
-		return *f.filteredLinesCache
-	}
-
-	var currentFilterPattern search.Search
-	if (*f).Filter.Active() {
-		currentFilterPattern = *f.Filter
-	}
-	var cacheFilterPattern search.Search
-	if f.filterWhenCaching.Active() {
-		cacheFilterPattern = f.filterWhenCaching
-	}
-	if !currentFilterPattern.Equals(cacheFilterPattern) {
-		f.rebuildCache()
-		return *f.filteredLinesCache
-	}
-
-	return *f.filteredLinesCache
-}
-
-func (f *FilteringReader) shouldPassThrough() bool {
+// The lines that pass the filter, or ok=false if there is no active filter and
+// the caller should pass through to the backing reader.
+//
+// Deciding that and filtering under one lock, with one copy of the filter,
+// means that someone clearing the filter can't get in between.
+func (f *FilteringReader) filteredLines() (lines []reader.NumberedLine, ok bool) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
 
@@ -157,10 +134,18 @@ func (f *FilteringReader) shouldPassThrough() bool {
 		f.filteredLinesCache = nil
 
 		// No filtering, so pass through all
-		return true
+		return nil, false
+	}
+	filter := *f.Filter
+
+	if f.filteredLinesCache == nil ||
+		f.unfilteredLineCountWhenCaching != f.BackingReader.GetLineCount() ||
+		f.lastLineWhenCaching != lastLine(f.BackingReader, f.unfilteredLineCountWhenCaching) ||
+		!filter.Equals(f.filterWhenCaching) {
+		f.rebuildCache(filter)
 	}
 
-	return false
+	return *f.filteredLinesCache, true
 }
 
 // Find the index of the line with this unfiltered line number.
@@ -171,7 +156,8 @@ func (f *FilteringReader) shouldPassThrough() bool {
 // Without a filter, a line past the end (the file shrank) gives the last line.
 // With no lines at all, return nil.
 func (f *FilteringReader) findLine(number linemetadata.Number) (index *linemetadata.Index, hidden bool) {
-	if f.shouldPassThrough() {
+	allLines, ok := f.filteredLines()
+	if !ok {
 		lineCount := f.BackingReader.GetLineCount()
 		if lineCount == 0 {
 			return nil, false
@@ -180,8 +166,6 @@ func (f *FilteringReader) findLine(number linemetadata.Number) (index *linemetad
 		// The line can be gone if the file got shorter when reloading
 		return ptr.To(linemetadata.IndexFromZeroBased(min(number.AsZeroBased(), lineCount-1))), false
 	}
-
-	allLines := f.getAllLines()
 
 	// Count the lines at or before the one we want
 	count := sort.Search(len(allLines), func(i int) bool {
@@ -196,11 +180,12 @@ func (f *FilteringReader) findLine(number linemetadata.Number) (index *linemetad
 }
 
 func (f *FilteringReader) GetLineCount() int {
-	if f.shouldPassThrough() {
+	allLines, ok := f.filteredLines()
+	if !ok {
 		return f.BackingReader.GetLineCount()
 	}
 
-	return len(f.getAllLines())
+	return len(allLines)
 }
 
 func (f *FilteringReader) ShouldShowLineCount() bool {
@@ -208,11 +193,11 @@ func (f *FilteringReader) ShouldShowLineCount() bool {
 }
 
 func (f *FilteringReader) GetLine(index linemetadata.Index) *reader.NumberedLine {
-	if f.shouldPassThrough() {
+	allLines, ok := f.filteredLines()
+	if !ok {
 		return f.BackingReader.GetLine(index)
 	}
 
-	allLines := f.getAllLines()
 	if index.Index() < 0 || index.Index() >= len(allLines) {
 		return nil
 	}
@@ -220,14 +205,13 @@ func (f *FilteringReader) GetLine(index linemetadata.Index) *reader.NumberedLine
 }
 
 func (f *FilteringReader) GetLines(firstLine linemetadata.Index, wantedLineCount int) reader.InputLines {
-	if f.shouldPassThrough() {
+	acceptedLines, ok := f.filteredLines()
+	if !ok {
 		return f.BackingReader.GetLines(firstLine, wantedLineCount)
 	}
 
-	acceptedLines := f.getAllLines()
-
 	if len(acceptedLines) == 0 || wantedLineCount == 0 {
-		return reader.InputLines{Status: f.createStatus(nil)}
+		return reader.InputLines{Status: f.createStatus(nil, len(acceptedLines))}
 	}
 
 	lastLine := firstLine.NonWrappingAdd(wantedLineCount - 1)
@@ -246,12 +230,12 @@ func (f *FilteringReader) GetLines(firstLine linemetadata.Index, wantedLineCount
 
 	return reader.InputLines{
 		Lines:  acceptedLines[firstLine.Index() : firstLine.Index()+wantedLineCount],
-		Status: f.createStatus(&lastLine),
+		Status: f.createStatus(&lastLine, len(acceptedLines)),
 	}
 }
 
 func (f *FilteringReader) GetLinesPreallocated(firstLine linemetadata.Index, resultLines *[]reader.NumberedLine) reader.Status {
-	if f.shouldPassThrough() {
+	if _, ok := f.filteredLines(); !ok {
 		return f.BackingReader.GetLinesPreallocated(firstLine, resultLines)
 	}
 
@@ -262,7 +246,7 @@ func (f *FilteringReader) GetLinesPreallocated(firstLine linemetadata.Index, res
 
 // In the general case, this will return a text like this:
 // "Filtered: 1234/5678 lines  22%"
-func (f *FilteringReader) createStatus(lastLine *linemetadata.Index) reader.Status {
+func (f *FilteringReader) createStatus(lastLine *linemetadata.Index, acceptedCount int) reader.Status {
 	baseCount := f.BackingReader.GetLineCount()
 	if baseCount == 0 {
 		return reader.Status{StatusText: "Filtered: No input lines"}
@@ -278,7 +262,6 @@ func (f *FilteringReader) createStatus(lastLine *linemetadata.Index) reader.Stat
 		return reader.Status{StatusText: "Filtered: 0" + baseCountString + " lines  100%"}
 	}
 
-	acceptedCount := f.GetLineCount()
 	acceptedCountString := linemetadata.IndexFromLength(acceptedCount).Format()
 
 	percent := int(math.Floor(100 * float64(lastLine.Index()+1) / float64(acceptedCount)))
@@ -309,5 +292,21 @@ func (f *FilteringReader) SetBackingReader(r reader.Reader) {
 	// Invalidate caches so they will be rebuilt lazily on next access.
 	f.filteredLinesCache = nil
 	f.unfilteredLineCountWhenCaching = -1
+	f.lastLineWhenCaching = nil
 	f.filterWhenCaching = search.Search{}
+}
+
+// The last of the first lineCount lines in r, or nil if lineCount is 0. Unlike
+// GetLine(), this doesn't make the reader read further ahead.
+func lastLine(r reader.Reader, lineCount int) *reader.Line {
+	index := linemetadata.IndexFromLength(lineCount)
+	if index == nil {
+		return nil
+	}
+
+	lines := r.GetLines(*index, 1).Lines
+	if len(lines) == 0 {
+		return nil
+	}
+	return lines[0].Line
 }
