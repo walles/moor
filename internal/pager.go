@@ -132,7 +132,8 @@ type Pager struct {
 	TabSize int // Number of spaces per tab, default 8, should be positive
 
 	// If non-nil, scroll to this line as soon as possible. Set this value to
-	// IndexMax() to follow the end of the input (tail).
+	// IndexMax() to follow the end of the input (tail). nil means we're not
+	// heading anywhere.
 	//
 	// This is about the current input, the other inputs keep theirs in
 	// readerView.targetLine.
@@ -220,6 +221,7 @@ type bookmark struct {
 
 type _PreHelpState struct {
 	scrollPosition scrollPosition
+	lineIndex      *linemetadata.Index // Of scrollPosition, which we can't compute while showing help
 	horizontal     horizontalPosition
 	targetLine     *linemetadata.Index
 }
@@ -498,11 +500,21 @@ func (p *Pager) Reader() reader.Reader {
 	return &p.filteringReader
 }
 
+// Reload the current file from disk, and scroll back to where we were once the
+// reloaded file has enough lines.
 func (p *Pager) ReloadCurrentReader() {
-	p.readerLock.Lock()
-	defer p.readerLock.Unlock()
+	// Where in the file we are, so that we can get back there
+	var position *linemetadata.Index
+	if p.isShowingHelp {
+		position = p.preHelpState.lineIndex
+	} else if p.TargetLine == nil {
+		position = p.lineIndex()
+	}
 
+	p.readerLock.Lock()
 	current := p.views[p.currentView].reader
+	p.readerLock.Unlock()
+
 	clone, err := current.Clone()
 	if err != nil {
 		log.Warnf("Failed to clone reader for reloading: %v", err)
@@ -513,13 +525,27 @@ func (p *Pager) ReloadCurrentReader() {
 		return
 	}
 
-	current.Close()
+	p.readerLock.Lock()
 	p.views[p.currentView].reader = clone
+	p.readerLock.Unlock()
 	p.filteringReader.SetBackingReader(clone)
+	current.Close()
 
 	select {
 	case p.readerSwitched <- struct{}{}:
 	default:
+	}
+
+	if position == nil {
+		// Already on our way somewhere, or nothing to get back to
+		return
+	}
+
+	if !p.isShowingHelp {
+		p.setTargetLine(position)
+	} else if p.preHelpState.targetLine == nil {
+		// Prep for going to the right place once we leave the help screen
+		p.preHelpState.targetLine = position
 	}
 }
 
@@ -601,11 +627,30 @@ func (p *Pager) scrollTowardsTargetLine() {
 
 	// We see the target, scroll to it
 	p.scrollPosition = NewScrollPositionFromIndex(*p.TargetLine, "goToTargetLine")
-	p.setTargetLine(nil)
+
+	if p.Reader().ReadingDone() {
+		// No more lines are coming, this is as close as we'll get
+		p.setTargetLine(nil)
+		return
+	}
+
+	if lineCount >= p.TargetLine.Index()+int(p.visibleHeight()) {
+		// Enough lines after the target to fill the screen, so rendering
+		// shows it at the top
+		p.setTargetLine(nil)
+		return
+	}
+
+	// Until there are enough lines after the target to fill the screen,
+	// rendering puts us further up. Keep the target until then, so that we
+	// come back down as more lines arrive.
 }
 
-// Except for setting TargetLine, this method also syncs with the reader so that
-// the reader knows how many lines it needs to fetch.
+// Set where we're heading. nil means nowhere: stay wherever the user scrolls
+// us, don't follow the input, and let the reader pause after its default
+// number of lines. IndexMax() means follow the end of the input.
+//
+// Also tells the reader how many lines it needs to fetch to get there.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 	p.readerLock.Lock()
 	r := p.views[p.currentView].reader
@@ -621,6 +666,13 @@ func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 	if targetLine == nil {
 		// No target, just do your thing
 		r.SetPauseAfterLines(reader.DEFAULT_PAUSE_AFTER_LINES)
+		return
+	}
+
+	if p.filter.Active() {
+		// The target is an index into the filtered lines. We can't tell how
+		// many unfiltered lines we need to get there, so read all of them.
+		r.SetPauseAfterLines(math.MaxInt)
 		return
 	}
 
@@ -747,7 +799,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 			case <-spinnerTicker.C:
 				currentSpinnerFrame := spinnerFrames[spinnerIndex]
-				if r.ReadingDone.Load() {
+				if r.ReadingDone() {
 					// We're done, clear the spinner
 					currentSpinnerFrame = ""
 				}
@@ -832,7 +884,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			holdPaint := canQuit && !p.sawUserInput
 			if !holdPaint {
 				quitIfOneScreenApplies := p.QuitIfOneScreen && !p.isShowingHelp && len(p.views) == 1
-				stillReading := !r.ReadingDone.Load()
+				stillReading := !r.ReadingDone()
 				if quitIfOneScreenApplies && stillReading && !paintedWhileReading {
 					// Remembered so that if this does turn into the #464
 					// blink, the warning above can say how early we painted.
@@ -850,6 +902,8 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			p.sawUserInput = true
 		}
 
+		wasViewingFile := p.isViewing() && !p.isShowingHelp
+
 		switch event := event.(type) {
 		case twin.EventKeyCode:
 			log.Tracef("Handling key event %d...", event.KeyCode)
@@ -865,10 +919,19 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			case twin.MouseWheelUp:
 				// Clipping is done in _Redraw()
 				p.scrollPosition = p.scrollPosition.PreviousLine(1)
+				if p.isViewing() {
+					// Other modes may need their target line, searching for
+					// example reads the whole file through it
+					p.handleScrolledUp()
+				}
 
 			case twin.MouseWheelDown:
 				// Clipping is done in _Redraw()
 				p.scrollPosition = p.scrollPosition.NextLine(1)
+				if p.isViewing() {
+					// See MouseWheelUp
+					p.handleScrolledDown()
+				}
 
 			case twin.MouseWheelLeft:
 				p.moveRight(-p.SideScrollAmount)
@@ -892,17 +955,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			p.scrollTowardsTargetLine()
 
 		case eventMaybeDone:
-			// Man pages come pre-formatted for the screen width, and line
-			// numbers will mess that up. So we disable line numbers if we
-			// detect a man page by its contents.
-			//
-			// See also noLineNumbersDefault() where we use environment
-			// variables to try to detect man paging.
-			if p.haveLoadedManPage() && len(p.views) == 1 {
-				p.ShowLineNumbers = false
-				p.showLineNumbers = false
-				log.Info("man page detected by contents, disabling line numbers")
-			}
+			p.handleMaybeDone()
 
 		case eventSpinnerUpdate:
 			spinner = event.spinner
@@ -910,9 +963,36 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 		default:
 			log.Warnf("Unhandled event type: %v", event)
 		}
+
+		isViewingFile := p.isViewing() && !p.isShowingHelp
+		if !wasViewingFile && isViewingFile {
+			// Reloading while in some other mode, or while showing help, may
+			// have given us somewhere to go
+			p.scrollTowardsTargetLine()
+		}
 	}
 
 	log.Info("Pager main loop done")
+}
+
+// Called when the current reader may be done reading or highlighting
+func (p *Pager) handleMaybeDone() {
+	// The last more-lines event may have been handled before reading was
+	// done, so this is our last chance to let go of any target line we have
+	// reached
+	p.scrollTowardsTargetLine()
+
+	// Man pages come pre-formatted for the screen width, and line numbers will
+	// mess that up. So we disable line numbers if we detect a man page by its
+	// contents.
+	//
+	// See also noLineNumbersDefault() where we use environment variables to
+	// try to detect man paging.
+	if p.haveLoadedManPage() && len(p.views) == 1 {
+		p.ShowLineNumbers = false
+		p.showLineNumbers = false
+		log.Info("man page detected by contents, disabling line numbers")
+	}
 }
 
 // The height parameter is the terminal height minus the height of the user's
@@ -980,7 +1060,7 @@ func (p *Pager) canQuitIfOneScreen(r *reader.ReaderImpl) bool {
 		return false
 	}
 
-	if !r.ReadingDone.Load() {
+	if !r.ReadingDone() {
 		return false
 	}
 

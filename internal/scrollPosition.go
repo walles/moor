@@ -356,6 +356,8 @@ func (p *Pager) deltaScreenLines() linemetadata.ScreenLines {
 	return p.scrollPosition.internalDontTouch.delta
 }
 
+// Show the last line of the input. Doesn't touch the target line, see
+// startFollowing() for that.
 func (p *Pager) scrollToEnd() {
 	inputLineCount := p.Reader().GetLineCount()
 	if inputLineCount == 0 {
@@ -370,14 +372,13 @@ func (p *Pager) scrollToEnd() {
 	// Scroll down enough. We know for sure the last line won't wrap into more
 	// lines than the number of characters it contains.
 	p.scrollPosition.internalDontTouch.delta = linemetadata.ScreenLines(len(lastInputLine.Line.Plain(lastInputIndex)))
+}
 
-	if p.TargetLine == nil {
-		// Start following the end of the file
-		//
-		// Otherwise, if we're already aiming for some place, don't overwrite
-		// that.
-		p.setTargetLine(ptr.To(linemetadata.IndexMax()))
-	}
+// Scroll to the end of the input right away, and then stay there as more lines
+// arrive
+func (p *Pager) startFollowing() {
+	p.scrollToEnd()
+	p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 }
 
 // True if the end of the input is visible on screen. Expensive, don't call too

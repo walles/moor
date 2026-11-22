@@ -145,7 +145,7 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 		highlightingStyle:       make(chan chroma.Style, 1),
 		doneWaitingForFirstByte: make(chan bool, 1),
 		HighlightingDone:        &highlightingDone,
-		ReadingDone:             &readingDone,
+		readingDone:             &readingDone,
 
 		formatter:     formatter,
 		readerOptions: options,
@@ -163,7 +163,7 @@ func newReaderFromStream(reader io.Reader, originalFileName *string, formatter c
 			// so say we're done. Otherwise everybody waiting for us waits
 			// forever: the pager holds its first paint until highlighting is
 			// done, and it spins its spinner until reading is.
-			returnMe.ReadingDone.Store(true)
+			returnMe.readingDone.Store(true)
 			returnMe.HighlightingDone.Store(true)
 			select {
 			case returnMe.MaybeDone <- true:
@@ -200,7 +200,7 @@ func NewFromTextForTesting(name string, text string) *ReaderImpl {
 	highlightingDone.Store(true) // No highlighting to do = nothing left = Done!
 	returnMe := &ReaderImpl{
 		lines:                   lines,
-		ReadingDone:             &readingDone,
+		readingDone:             &readingDone,
 		HighlightingDone:        &highlightingDone,
 		doneWaitingForFirstByte: make(chan bool, 1),
 	}

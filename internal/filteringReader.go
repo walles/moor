@@ -192,6 +192,14 @@ func (f *FilteringReader) ShouldShowLineCount() bool {
 	panic("Unexpected call to FilteringReader.ShouldShowLineCount()")
 }
 
+// Filtering is done on demand, so all filtered lines are available once
+// the backing reader has read all of its lines
+func (f *FilteringReader) ReadingDone() bool {
+	f.lock.Lock()
+	defer f.lock.Unlock()
+	return f.BackingReader.ReadingDone()
+}
+
 func (f *FilteringReader) GetLine(index linemetadata.Index) *reader.NumberedLine {
 	allLines, ok := f.filteredLines()
 	if !ok {
