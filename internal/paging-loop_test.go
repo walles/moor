@@ -444,3 +444,28 @@ func TestMouseWheelStartsFollowing(t *testing.T) {
 
 	screen.waitForTopRow(t, "new91")
 }
+
+// Searching reads the whole file, so that hits far down can be found. Scrolling
+// with the mouse wheel while typing the search term shouldn't stop that.
+func TestMouseWheelWhileSearchingKeepsReading(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	lines := linesForTesting("line", 20*reader.DEFAULT_PAUSE_AFTER_LINES) + "needle\n"
+	assert.NilError(t, os.WriteFile(file, []byte(lines), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	pager.searchHistory = &SearchHistory{} // No file backing, keep this test disk-free
+	screen := newPagingLoopScreen(40, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "line0")
+
+	typeRunes(t, screen, pagingDone, "/")
+	handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelDown})
+	handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelUp})
+	typeRunes(t, screen, pagingDone, "needle")
+
+	screen.waitForRow(t, "needle")
+}
