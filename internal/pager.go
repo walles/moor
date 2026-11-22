@@ -132,7 +132,8 @@ type Pager struct {
 	TabSize int // Number of spaces per tab, default 8, should be positive
 
 	// If non-nil, scroll to this line as soon as possible. Set this value to
-	// IndexMax() to follow the end of the input (tail).
+	// IndexMax() to follow the end of the input (tail). nil means we're not
+	// heading anywhere.
 	//
 	// This is about the current input, the other inputs keep theirs in
 	// readerView.targetLine.
@@ -645,8 +646,11 @@ func (p *Pager) scrollTowardsTargetLine() {
 	// come back down as more lines arrive.
 }
 
-// Except for setting TargetLine, this method also syncs with the reader so that
-// the reader knows how many lines it needs to fetch.
+// Set where we're heading. nil means nowhere: stay wherever the user scrolls
+// us, don't follow the input, and let the reader pause after its default
+// number of lines. IndexMax() means follow the end of the input.
+//
+// Also tells the reader how many lines it needs to fetch to get there.
 func (p *Pager) setTargetLine(targetLine *linemetadata.Index) {
 	p.readerLock.Lock()
 	r := p.views[p.currentView].reader
