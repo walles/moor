@@ -22,7 +22,7 @@ func (reader *ReaderImpl) readStream(stream io.Reader, formatter chroma.Formatte
 	// start tailing or doing expensive highlighting.
 	reader.closeStream()
 
-	reader.ReadingDone.Store(true)
+	reader.readingDone.Store(true)
 	select {
 	case reader.MaybeDone <- true:
 	default:

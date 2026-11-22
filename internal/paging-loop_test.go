@@ -97,7 +97,7 @@ func TestReloadWhileStillReading(t *testing.T) {
 	screen := newPagingLoopScreen(20, 10)
 	pagingDone := startPagingInBackground(t, pager, screen)
 	screen.waitForRow(t, "old0")
-	assert.Assert(t, !r.ReadingDone.Load(), "Test setup broken, reading should not be done")
+	assert.Assert(t, !r.ReadingDone(), "Test setup broken, reading should not be done")
 
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", lineCount)), 0o600))
 	typeRunes(t, screen, pagingDone, "r")
@@ -225,7 +225,7 @@ func TestReloadKeepsPosition(t *testing.T) {
 	pager.readerLock.Lock()
 	original := pager.views[pager.currentView].reader
 	pager.readerLock.Unlock()
-	assert.Assert(t, !original.ReadingDone.Load(), "Test setup broken, reading should not be done")
+	assert.Assert(t, !original.ReadingDone(), "Test setup broken, reading should not be done")
 
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 200_000)), 0o600))
 	typeRunes(t, screen, pagingDone, "r")
@@ -293,7 +293,7 @@ func TestRewrittenFileInOtherModeKeepsPosition(t *testing.T) {
 				reloaded = pager.views[pager.currentView].reader
 				return reloaded != original
 			}, func() string { return "the rewritten file to be reloaded" })
-			waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the rewritten file to be read" })
+			waitUntil(t, reloaded.ReadingDone, func() string { return "the rewritten file to be read" })
 
 			// The background goroutine throttles more-lines notifications for
 			// 200ms. Wait for any last one to arrive while we're still in the

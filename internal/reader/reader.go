@@ -121,11 +121,11 @@ type ReaderImpl struct {
 	// producer's first byte can't cause a --quit-if-one-screen blink and is
 	// correctly excluded here. Used for reporting how far into the read we were
 	// when something happened, alongside the "Stream read in" duration logged
-	// once ReadingDone.
+	// once ReadingDone().
 	StartedAt time.Time
 
 	// Stream has been completely read. May not be highlighted yet.
-	ReadingDone *atomic.Bool
+	readingDone *atomic.Bool
 
 	// Highlighting has been completed.
 	HighlightingDone *atomic.Bool
@@ -289,7 +289,7 @@ func countLines(filename string) (uint64, error) {
 // Wait for reader to finish reading and highlighting. Used by tests.
 func (reader *ReaderImpl) Wait() error {
 	// Wait for our goroutine to finish
-	for !reader.ReadingDone.Load() {
+	for !reader.readingDone.Load() {
 		if reader.PauseStatus.Load() {
 			// We want more lines
 			reader.SetPauseAfterLines(reader.GetLineCount() * 2)
@@ -362,8 +362,14 @@ func (reader *ReaderImpl) GetLineCount() int {
 	return len(reader.lines)
 }
 
+// True once the stream has been completely read. It may not be highlighted
+// yet.
+func (reader *ReaderImpl) ReadingDone() bool {
+	return reader.readingDone.Load()
+}
+
 func (reader *ReaderImpl) ShouldShowLineCount() bool {
-	if reader.ReadingDone.Load() {
+	if reader.readingDone.Load() {
 		// We are done, the number won't change, show it!
 		return true
 	}

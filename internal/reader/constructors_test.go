@@ -64,7 +64,7 @@ func TestReaderIsDoneAfterHighlightingPanics(t *testing.T) {
 		}
 	}
 
-	assert.Assert(t, testMe.ReadingDone.Load(), "Reading should be done as well")
+	assert.Assert(t, testMe.ReadingDone(), "Reading should be done as well")
 }
 
 // NewFromStream takes ownership of the stream, so once it has consumed the
@@ -297,7 +297,7 @@ func TestCloneOfReaderStillReadingIsHighlighted(t *testing.T) {
 	assert.NilError(t, clone.Wait())
 	assertHighlighted(t, clone)
 
-	assert.Assert(t, !original.ReadingDone.Load(), "Test setup broken, original should still be reading")
+	assert.Assert(t, !original.ReadingDone(), "Test setup broken, original should still be reading")
 }
 
 // A clone shows the same name as the original, even if the name was changed

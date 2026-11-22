@@ -543,7 +543,7 @@ func (p *Pager) ReloadCurrentReader() {
 	if !p.isShowingHelp {
 		p.setTargetLine(position)
 	} else if p.preHelpState.targetLine == nil {
-		// Leaving help takes us here
+		// Prep for going to the right place once we leave the help screen
 		p.preHelpState.targetLine = position
 	}
 }
@@ -634,7 +634,7 @@ func (p *Pager) scrollTowardsTargetLine() {
 	if p.isShowingHelp {
 		r = _HelpReader
 	}
-	readingDone := r.ReadingDone.Load()
+	readingDone := r.ReadingDone()
 
 	// Until there are enough lines after the target to fill the screen,
 	// rendering puts us further up. Keep the target until then, so that we come
@@ -796,7 +796,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 			case <-spinnerTicker.C:
 				currentSpinnerFrame := spinnerFrames[spinnerIndex]
-				if r.ReadingDone.Load() {
+				if r.ReadingDone() {
 					// We're done, clear the spinner
 					currentSpinnerFrame = ""
 				}
@@ -881,7 +881,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			holdPaint := canQuit && !p.sawUserInput
 			if !holdPaint {
 				quitIfOneScreenApplies := p.QuitIfOneScreen && !p.isShowingHelp && len(p.views) == 1
-				stillReading := !r.ReadingDone.Load()
+				stillReading := !r.ReadingDone()
 				if quitIfOneScreenApplies && stillReading && !paintedWhileReading {
 					// Remembered so that if this does turn into the #464
 					// blink, the warning above can say how early we painted.
@@ -1048,7 +1048,7 @@ func (p *Pager) canQuitIfOneScreen(r *reader.ReaderImpl) bool {
 		return false
 	}
 
-	if !r.ReadingDone.Load() {
+	if !r.ReadingDone() {
 		return false
 	}
 

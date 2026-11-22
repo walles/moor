@@ -849,7 +849,7 @@ func TestReloadReadsToTheEndWhenFollowing(t *testing.T) {
 	// what it has been told to read
 	reloaded := pager.views[pager.currentView].reader
 	defer reloaded.Close()
-	waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the reloaded file to be read to the end" })
+	waitUntil(t, reloaded.ReadingDone, func() string { return "the reloaded file to be read to the end" })
 	assert.Equal(t, reloaded.GetLineCount(), lineCount)
 }
 
@@ -872,7 +872,7 @@ func TestCloseReadersClosesReloadedReaders(t *testing.T) {
 	pager.CloseReaders()
 
 	// A closed reader stops reading, paused or not
-	waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the reloaded reader to stop reading" })
+	waitUntil(t, reloaded.ReadingDone, func() string { return "the reloaded reader to stop reading" })
 	assert.Assert(t, reloaded.GetLineCount() < lineCount, "Closed reader should not read to the end")
 }
 
@@ -932,7 +932,7 @@ func TestTargetLineLetGoWhenDone(t *testing.T) {
 	assert.Assert(t, pager.TargetLine != nil, "Test setup broken, target should be kept while reading")
 
 	assert.NilError(t, pipeWriter.Close())
-	waitUntil(t, r.ReadingDone.Load, func() string { return "reading to be done" })
+	waitUntil(t, r.ReadingDone, func() string { return "reading to be done" })
 	pager.handleMaybeDone()
 
 	assert.Assert(t, pager.TargetLine == nil, "Target should be let go once reading is done")
