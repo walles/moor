@@ -958,17 +958,7 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			p.scrollTowardsTargetLine()
 
 		case eventMaybeDone:
-			// Man pages come pre-formatted for the screen width, and line
-			// numbers will mess that up. So we disable line numbers if we
-			// detect a man page by its contents.
-			//
-			// See also noLineNumbersDefault() where we use environment
-			// variables to try to detect man paging.
-			if p.haveLoadedManPage() && len(p.views) == 1 {
-				p.ShowLineNumbers = false
-				p.showLineNumbers = false
-				log.Info("man page detected by contents, disabling line numbers")
-			}
+			p.handleMaybeDone()
 
 		case eventSpinnerUpdate:
 			spinner = event.spinner
@@ -985,6 +975,21 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 	}
 
 	log.Info("Pager main loop done")
+}
+
+// Called when the current reader may be done reading or highlighting
+func (p *Pager) handleMaybeDone() {
+	// Man pages come pre-formatted for the screen width, and line numbers will
+	// mess that up. So we disable line numbers if we detect a man page by its
+	// contents.
+	//
+	// See also noLineNumbersDefault() where we use environment variables to
+	// try to detect man paging.
+	if p.haveLoadedManPage() && len(p.views) == 1 {
+		p.ShowLineNumbers = false
+		p.showLineNumbers = false
+		log.Info("man page detected by contents, disabling line numbers")
+	}
 }
 
 // The height parameter is the terminal height minus the height of the user's
