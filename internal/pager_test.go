@@ -908,3 +908,32 @@ func TestScrollTowardsTargetLineWithFewLinesAfterIt(t *testing.T) {
 
 	assert.Equal(t, pager.lineIndex().Index(), 15)
 }
+
+// A target line kept around while waiting for more lines should be let go once
+// reading is done, even if no more lines arrived. Otherwise lines added to the
+// file later, much later possibly, make us jump to it.
+func TestTargetLineLetGoWhenDone(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	go func() {
+		_, _ = io.WriteString(pipeWriter, linesForTesting("x", 20))
+	}()
+	r, err := reader.NewFromStream("", pipeReader, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	t.Cleanup(r.Close)
+	waitUntil(t, func() bool { return r.GetLineCount() == 20 }, func() string { return "the lines" })
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.mode = PagerModeViewing{pager: pager}
+
+	// Five lines after the target, fewer than fit on the screen
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(15)))
+	pager.scrollTowardsTargetLine()
+	assert.Assert(t, pager.TargetLine != nil, "Test setup broken, target should be kept while reading")
+
+	assert.NilError(t, pipeWriter.Close())
+	waitUntil(t, r.ReadingDone.Load, func() string { return "reading to be done" })
+	pager.handleMaybeDone()
+
+	assert.Assert(t, pager.TargetLine == nil, "Target should be let go once reading is done")
+}
