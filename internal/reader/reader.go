@@ -83,6 +83,10 @@ type Reader interface {
 	// When we're not paused, the number will be constantly changing, indicating
 	// that the counting is not done yet.
 	ShouldShowLineCount() bool
+
+	// True once all lines have been read. More may still arrive if a file is
+	// being tailed.
+	ReadingDone() bool
 }
 
 // ReaderImpl reads a file into an array of strings.
