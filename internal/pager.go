@@ -613,6 +613,11 @@ func (p *Pager) followIfScrolledToEnd() {
 	p.setTargetLine(ptr.To(linemetadata.IndexMax()))
 }
 
+// True if we're showing the file, and not some prompt or the help screen
+func (p *Pager) isViewingFile() bool {
+	return p.isViewing() && !p.isShowingHelp
+}
+
 func (p *Pager) scrollTowardsTargetLine() {
 	// Without the isViewing() check, following will continue while
 	// searching, and I prefer it to stop so people can see what they
@@ -909,6 +914,8 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			p.sawUserInput = true
 		}
 
+		wasViewingFile := p.isViewingFile()
+
 		switch event := event.(type) {
 		case twin.EventKeyCode:
 			log.Tracef("Handling key event %d...", event.KeyCode)
@@ -968,6 +975,12 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 		default:
 			log.Warnf("Unhandled event type: %v", event)
+		}
+
+		if !wasViewingFile && p.isViewingFile() {
+			// Reloading while in some other mode, or while showing help, may
+			// have given us somewhere to go
+			p.scrollTowardsTargetLine()
 		}
 	}
 

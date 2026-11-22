@@ -55,18 +55,13 @@ func (m *PagerModeGotoLine) onKey(key twin.KeyCode) {
 	case twin.KeyEnter:
 		m.updateLineNumber(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
-		m.pager.scrollTowardsTargetLine()
 
 	case twin.KeyEscape:
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 
-		// Reloading while the prompt was open may have given us somewhere to go
-		m.pager.scrollTowardsTargetLine()
-
 	default:
 		log.Tracef("Unhandled goto key event %v, treating as a viewing key event", key)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
-		m.pager.scrollTowardsTargetLine()
 		m.pager.mode.onKey(key)
 	}
 }

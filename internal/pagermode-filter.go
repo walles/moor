@@ -48,18 +48,12 @@ func (m *PagerModeFilter) onKey(key twin.KeyCode) {
 		m.history.Commit(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 
-		// Reloading while we were filtering may have given us somewhere to go
-		m.pager.scrollTowardsTargetLine()
-
 	case twin.KeyEscape:
 		m.history.Commit(m.inputBox.text)
 		m.pager.mode = PagerModeViewing{pager: m.pager}
 		m.pager.filter = search.Search{}
 		m.pager.search.Clear()
 		m.pager.scrollPosition = m.initialScrollPosition
-
-		// Reloading while we were filtering may have given us somewhere to go
-		m.pager.scrollTowardsTargetLine()
 
 	case twin.KeyUp:
 		if text, ok := m.history.Move(-1); ok {
