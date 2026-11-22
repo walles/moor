@@ -53,6 +53,14 @@ type ReaderOptions struct {
 	Lexer chroma.Lexer
 }
 
+// Once a line has been returned at some index, that index keeps referring to
+// the same input line for the lifetime of the Reader. Lines are only ever
+// appended. A line's contents may be replaced by a highlighted version, and
+// the last line may grow until its newline arrives, but lines are never
+// removed or renumbered.
+//
+// To show new contents of a rewritten file, replace the Reader with a new one
+// rather than changing this one.
 type Reader interface {
 	GetLineCount() int
 	GetLine(index linemetadata.Index) *NumberedLine
