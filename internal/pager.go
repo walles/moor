@@ -979,6 +979,11 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 
 // Called when the current reader may be done reading or highlighting
 func (p *Pager) handleMaybeDone() {
+	// The last more-lines event may have been handled before reading was
+	// done, so this is our last chance to let go of any target line we have
+	// reached
+	p.scrollTowardsTargetLine()
+
 	// Man pages come pre-formatted for the screen width, and line numbers will
 	// mess that up. So we disable line numbers if we detect a man page by its
 	// contents.
