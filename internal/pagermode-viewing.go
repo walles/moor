@@ -79,8 +79,7 @@ func (m PagerModeViewing) onKey(keyCode twin.KeyCode) {
 		p.handleScrolledUp()
 
 	case twin.KeyEnd:
-		p.setTargetLine(nil) // Follow, wherever we were heading before
-		p.scrollToEnd()
+		p.startFollowing()
 
 	case twin.KeyPgUp:
 		p.scrollPosition = p.scrollPosition.PreviousLine(p.visibleHeight())
@@ -147,8 +146,7 @@ func (m PagerModeViewing) onRune(char rune) {
 		p.handleScrolledUp()
 
 	case '>', 'G':
-		p.setTargetLine(nil) // Follow, wherever we were heading before
-		p.scrollToEnd()
+		p.startFollowing()
 
 	// '\x06' = CTRL-f, should work like just 'f'.
 	// Ref: https://github.com/walles/moor/issues/107
