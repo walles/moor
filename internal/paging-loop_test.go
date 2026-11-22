@@ -348,8 +348,8 @@ func TestRewrittenFileKeepsFilteredPosition(t *testing.T) {
 	screen.waitForTopRow(t, "newhit79950")
 }
 
-// Scrolling with the mouse wheel while following should move us, even though it
-// doesn't stop the following
+// Scrolling with the mouse wheel while following should move us and stop
+// following
 func TestMouseWheelWhileFollowing(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "lines.txt")
 	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100)), 0o600))
@@ -412,4 +412,35 @@ func TestMouseWheelStopsFollowing(t *testing.T) {
 	})
 
 	assert.Equal(t, rows[0], "old90", "Last frame:\n%s", strings.Join(rows, "\n"))
+}
+
+// Scrolling down to the end with the mouse wheel should start following, just
+// like scrolling down with the keyboard does
+func TestMouseWheelStartsFollowing(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(40, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	// 100 lines on a screen with room for 9 means old91 at the top at the end
+	for range 91 {
+		handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelDown})
+	}
+	screen.waitForTopRow(t, "old91")
+
+	appendTo, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0)
+	assert.NilError(t, err)
+	_, err = appendTo.WriteString(linesForTesting("new", 100))
+	assert.NilError(t, err)
+	assert.NilError(t, appendTo.Close())
+
+	screen.waitForTopRow(t, "new91")
 }

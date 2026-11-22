@@ -919,10 +919,12 @@ func (p *Pager) StartPaging(screen twin.Screen, chromaStyle *chroma.Style, chrom
 			case twin.MouseWheelUp:
 				// Clipping is done in _Redraw()
 				p.scrollPosition = p.scrollPosition.PreviousLine(1)
+				p.handleScrolledUp()
 
 			case twin.MouseWheelDown:
 				// Clipping is done in _Redraw()
 				p.scrollPosition = p.scrollPosition.NextLine(1)
+				p.handleScrolledDown()
 
 			case twin.MouseWheelLeft:
 				p.moveRight(-p.SideScrollAmount)
