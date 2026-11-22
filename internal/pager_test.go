@@ -937,3 +937,30 @@ func TestTargetLineLetGoWhenDone(t *testing.T) {
 
 	assert.Assert(t, pager.TargetLine == nil, "Target should be let go once reading is done")
 }
+
+// While showing help, whether the file is still loading shouldn't matter for
+// scrolling in the help text
+func TestTargetLineInHelpWhileFileIsLoading(t *testing.T) {
+	pipeReader, pipeWriter := io.Pipe()
+	t.Cleanup(func() { _ = pipeWriter.Close() })
+	go func() {
+		_, _ = io.WriteString(pipeWriter, linesForTesting("x", 20))
+	}()
+	r, err := reader.NewFromStream("", pipeReader, formatters.TTY16m, reader.ReaderOptions{Style: styles.Get("native")})
+	assert.NilError(t, err)
+	t.Cleanup(r.Close)
+	waitUntil(t, func() bool { return r.GetLineCount() == 20 }, func() string { return "the lines" })
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.mode = PagerModeViewing{pager: pager}
+	pager.mode.onRune('h')
+	assert.Assert(t, pager.isShowingHelp, "Test setup broken, help should be showing")
+
+	// Two lines after the target, fewer than fit on the screen
+	helpLineCount := pager.Reader().GetLineCount()
+	pager.setTargetLine(ptr.To(linemetadata.IndexFromZeroBased(helpLineCount - 3)))
+	pager.scrollTowardsTargetLine()
+
+	assert.Assert(t, pager.TargetLine == nil, "The help text is all there, the target has been reached")
+}
