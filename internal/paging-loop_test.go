@@ -266,10 +266,11 @@ func TestRewrittenFileInOtherModeKeepsPosition(t *testing.T) {
 	for _, mode := range []struct {
 		name  string
 		enter string
-		leave twin.KeyCode
+		leave twin.Event
 	}{
-		{"filter", "&", twin.KeyEnter},
-		{"go to line", "g", twin.KeyEscape},
+		{"filter", "&", twin.EventKeyCode{KeyCode: twin.KeyEnter}},
+		{"go to line, Esc", "g", twin.EventKeyCode{KeyCode: twin.KeyEscape}},
+		{"go to line, q", "g", twin.EventRune{Rune: 'q'}},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			file := filepath.Join(t.TempDir(), "lines.txt")
@@ -295,12 +296,13 @@ func TestRewrittenFileInOtherModeKeepsPosition(t *testing.T) {
 			waitUntil(t, reloaded.ReadingDone.Load, func() string { return "the rewritten file to be read" })
 
 			// The background goroutine throttles more-lines notifications for
-			// 200ms. Wait for any last one to be handled, or that one could
-			// take us to the right place in viewing mode, and this test would
-			// pass whether or not leaving the mode does.
+			// 200ms. Wait for any last one to arrive while we're still in the
+			// mode. Arriving after we left, it would take us to the right
+			// place, and this test would pass whether or not leaving the mode
+			// does.
 			time.Sleep(300 * time.Millisecond)
 
-			handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: mode.leave})
+			handEvent(t, screen, pagingDone, mode.leave)
 			screen.waitForTopRow(t, "new89999")
 		})
 	}
@@ -344,4 +346,27 @@ func TestRewrittenFileKeepsFilteredPosition(t *testing.T) {
 	assert.NilError(t, os.WriteFile(file, []byte(linesWithHits("new", 95_000)), 0o600))
 
 	screen.waitForTopRow(t, "newhit79950")
+}
+
+// Scrolling with the mouse wheel while following should move us, even though it
+// doesn't stop the following
+func TestMouseWheelWhileFollowing(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	typeRunes(t, screen, pagingDone, "G")
+	screen.waitForTopRow(t, "old91")
+
+	handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelUp})
+	screen.waitForTopRow(t, "old90")
 }
