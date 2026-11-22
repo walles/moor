@@ -370,3 +370,46 @@ func TestMouseWheelWhileFollowing(t *testing.T) {
 	handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelUp})
 	screen.waitForTopRow(t, "old90")
 }
+
+// Scrolling up with the mouse wheel should stop following, just like scrolling
+// up with the keyboard does
+func TestMouseWheelStopsFollowing(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 100)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(40, 10) // Wide enough for the line count
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	typeRunes(t, screen, pagingDone, "G")
+	screen.waitForTopRow(t, "old91")
+
+	handEvent(t, screen, pagingDone, twin.EventMouse{Buttons: twin.MouseWheelUp})
+	screen.waitForTopRow(t, "old90")
+
+	appendTo, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0)
+	assert.NilError(t, err)
+	_, err = appendTo.WriteString(linesForTesting("new", 100))
+	assert.NilError(t, err)
+	assert.NilError(t, appendTo.Close())
+
+	// Shown after handling the new lines, which is when following would have
+	// moved us
+	var rows []string
+	waitUntil(t, func() bool {
+		rows = screen.shownRows()
+		return slices.ContainsFunc(rows, func(row string) bool {
+			return strings.Contains(row, "200 lines")
+		})
+	}, func() string {
+		return fmt.Sprintf("the appended lines to be counted, last frame:\n%s", strings.Join(rows, "\n"))
+	})
+
+	assert.Equal(t, rows[0], "old90", "Last frame:\n%s", strings.Join(rows, "\n"))
+}
