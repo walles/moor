@@ -525,18 +525,6 @@ func (p *Pager) ReloadCurrentReader() {
 		return
 	}
 
-	if !p.isShowingHelp {
-		// Swapping in an empty reader would flash an empty screen, so let the
-		// clone fill the screen first. With help showing, nothing of the file
-		// is on screen to flash.
-		heading := p.TargetLine
-		if heading == nil {
-			// Not on our way anywhere, just staying on the line we're at
-			heading = position
-		}
-		waitForLines(clone, p.linesNeededAt(heading))
-	}
-
 	p.readerLock.Lock()
 	p.views[p.currentView].reader = clone
 	p.readerLock.Unlock()
@@ -548,17 +536,25 @@ func (p *Pager) ReloadCurrentReader() {
 	default:
 	}
 
-	if position == nil {
-		// Already on our way somewhere, or nothing to get back to
+	if p.isShowingHelp {
+		if position != nil && p.preHelpState.targetLine == nil {
+			// Prep for going to the right place once we leave the help screen
+			p.preHelpState.targetLine = position
+		}
+
+		// Help covers the file, so there's nothing to wait for
 		return
 	}
 
-	if !p.isShowingHelp {
+	if position != nil {
+		// Right away, this is what tells the clone how far to read
 		p.setTargetLine(position)
-	} else if p.preHelpState.targetLine == nil {
-		// Prep for going to the right place once we leave the help screen
-		p.preHelpState.targetLine = position
 	}
+
+	// The main loop draws the screen when we return. Drawing before the clone
+	// has any lines would flash an empty screen, so let it fill the screen
+	// first.
+	waitForLines(clone, p.linesNeededAt(p.TargetLine))
 }
 
 // How many lines the reloaded file needs before it can show the screen at
