@@ -842,6 +842,7 @@ func TestReloadReadsToTheEndWhenFollowing(t *testing.T) {
 	assert.NilError(t, err)
 
 	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
 	pager.setTargetLine(ptr.To(linemetadata.IndexMax())) // Follow
 	pager.ReloadCurrentReader()
 

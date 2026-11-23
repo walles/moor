@@ -525,6 +525,18 @@ func (p *Pager) ReloadCurrentReader() {
 		return
 	}
 
+	if !p.isShowingHelp {
+		// Swapping in an empty reader would flash an empty screen, so let the
+		// clone fill the screen first. With help showing, nothing of the file
+		// is on screen to flash.
+		heading := p.TargetLine
+		if heading == nil {
+			// Not on our way anywhere, just staying on the line we're at
+			heading = position
+		}
+		waitForLines(clone, p.linesNeededAt(heading))
+	}
+
 	p.readerLock.Lock()
 	p.views[p.currentView].reader = clone
 	p.readerLock.Unlock()
@@ -546,6 +558,46 @@ func (p *Pager) ReloadCurrentReader() {
 	} else if p.preHelpState.targetLine == nil {
 		// Prep for going to the right place once we leave the help screen
 		p.preHelpState.targetLine = position
+	}
+}
+
+// How many lines the reloaded file needs before it can show the screen at
+// heading
+func (p *Pager) linesNeededAt(heading *linemetadata.Index) int {
+	height := int(p.visibleHeight())
+
+	if heading == nil {
+		// Top of the file
+		return height
+	}
+
+	if *heading == linemetadata.IndexMax() {
+		// Following shows the last lines read so far, any screenful will do
+		return height
+	}
+
+	return heading.Index() + height
+}
+
+// How long a reload waits for the reloaded file to fill the screen before
+// showing it anyway. Pressing 'r' starts feeling sluggish somewhere above this.
+//
+// A 64MB file gets there in about 20ms, 40ms with the race detector. The time
+// grows with the file size since we count all lines before reading any, so
+// this covers files up to a few hundred megabytes. Larger ones show an empty
+// screen for a moment.
+const reloadWaitLimit = 100 * time.Millisecond
+
+// Wait until the reader has at least this many lines or is done reading, but
+// no longer than reloadWaitLimit.
+func waitForLines(r reader.Reader, needed int) {
+	deadline := time.Now().Add(reloadWaitLimit)
+	for !r.ReadingDone() && r.GetLineCount() < needed {
+		if time.Now().After(deadline) {
+			log.Debugf("Gave up waiting for %d lines after %s, got %d", needed, reloadWaitLimit, r.GetLineCount())
+			return
+		}
+		time.Sleep(3 * time.Millisecond)
 	}
 }
 

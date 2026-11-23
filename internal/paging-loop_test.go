@@ -134,6 +134,45 @@ func TestReloadShowsNoEmptyFrame(t *testing.T) {
 	}
 }
 
+// Reload a file with this many lines, and check that we didn't wait for lines
+// that will never come
+func testReloadWithoutWaiting(t *testing.T, lineCount int) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "---") // End of input marker, we're up and running
+
+	t0 := time.Now()
+	typeRunes(t, screen, pagingDone, "r")
+	// The main loop takes this only after it's done reloading and redrawing
+	handEvent(t, screen, pagingDone, twin.EventResize{})
+	elapsed := time.Since(t0)
+
+	// If this turns out to be flaky, the machine stalled for longer than
+	// reloadWaitLimit during a reload that normally takes a few milliseconds.
+	// Waiting out the whole limit, which is the bug this test catches, always
+	// takes longer than that.
+	assert.Assert(t, elapsed < reloadWaitLimit,
+		"Reloading took %s, looks like we waited for lines that never came", elapsed)
+}
+
+func TestReloadEmptyFileWithoutWaiting(t *testing.T) {
+	testReloadWithoutWaiting(t, 0)
+}
+
+// Fewer lines than the screen wants
+func TestReloadShortFileWithoutWaiting(t *testing.T) {
+	testReloadWithoutWaiting(t, 3)
+}
+
 // A file rewritten on disk must show up rewritten in the pager
 func TestRewrittenFileIsReloaded(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "lines.txt")
