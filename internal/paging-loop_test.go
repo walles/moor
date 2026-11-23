@@ -105,6 +105,74 @@ func TestReloadWhileStillReading(t *testing.T) {
 	screen.waitForRow(t, "new0")
 }
 
+// Reloading must not flash an empty screen before the reloaded lines arrive.
+// Ref: https://github.com/walles/moor/pull/478
+func TestReloadShowsNoEmptyFrame(t *testing.T) {
+	// Enough lines that the reloaded reader needs a moment before its first
+	// lines arrive. It counts all lines before reading any of them.
+	lineCount := 100_000
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", lineCount)), 0o600))
+	framesBeforeReload := len(screen.shownFrames())
+	typeRunes(t, screen, pagingDone, "r")
+	screen.waitForRow(t, "new0")
+
+	for _, frame := range screen.shownFrames()[framesBeforeReload:] {
+		assert.Assert(t, frame[0] == "old0" || frame[0] == "new0",
+			"Expected the first line at the top after reloading, got:\n%s", strings.Join(frame, "\n"))
+	}
+}
+
+// Reload a file with this many lines, and check that we didn't wait for lines
+// that will never come
+func testReloadWithoutWaiting(t *testing.T, lineCount int) {
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "---") // End of input marker, we're up and running
+
+	t0 := time.Now()
+	typeRunes(t, screen, pagingDone, "r")
+	// The main loop takes this only after it's done reloading and redrawing
+	handEvent(t, screen, pagingDone, twin.EventResize{})
+	elapsed := time.Since(t0)
+
+	// If this turns out to be flaky, the machine stalled for longer than
+	// reloadWaitLimit during a reload that normally takes a few milliseconds.
+	// Waiting out the whole limit, which is the bug this test catches, always
+	// takes longer than that.
+	assert.Assert(t, elapsed < reloadWaitLimit,
+		"Reloading took %s, looks like we waited for lines that never came", elapsed)
+}
+
+func TestReloadEmptyFileWithoutWaiting(t *testing.T) {
+	testReloadWithoutWaiting(t, 0)
+}
+
+// Fewer lines than the screen wants
+func TestReloadShortFileWithoutWaiting(t *testing.T) {
+	testReloadWithoutWaiting(t, 3)
+}
+
 // A file rewritten on disk must show up rewritten in the pager
 func TestRewrittenFileIsReloaded(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "lines.txt")
@@ -153,6 +221,47 @@ func TestRewrittenFileIsReloadedWhenSwitchedTo(t *testing.T) {
 	for _, frame := range screen.shownFrames()[framesBeforeSwitch:] {
 		assert.Assert(t, !slices.Contains(frame, "old0"),
 			"Stale content shown after switching:\n%s", strings.Join(frame, "\n"))
+	}
+}
+
+// Switching to a file that was rewritten on disk while we were away should take
+// us straight back to where we were in it, without first showing some other
+// part of it
+func TestSwitchingToRewrittenFileShowsOnlyTarget(t *testing.T) {
+	// A file we leave at its top
+	a := reader.NewFromTextForTesting("a", linesForTesting("a", 3))
+
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 20_000)), 0o600))
+	b, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(b, a)
+	pager.ShowLineNumbers = false
+	pager.searchHistory = &SearchHistory{} // No file backing, keep this test disk-free
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	typeRunes(t, screen, pagingDone, "g15000")
+	handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: twin.KeyEnter})
+	screen.waitForTopRow(t, "old14999")
+	waitForWatching(t, pager)
+
+	typeRunes(t, screen, pagingDone, ":n")
+	screen.waitForTopRow(t, "a0")
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 19_000)), 0o600))
+	waitUntil(t, b.WantsReload, func() string { return "the rewritten file to be noticed" })
+
+	framesBeforeSwitch := len(screen.shownFrames())
+	typeRunes(t, screen, pagingDone, ":p")
+	screen.waitForTopRow(t, "new14999")
+
+	for _, frame := range screen.shownFrames()[framesBeforeSwitch:] {
+		assert.Assert(t, frame[0] == "a0" || frame[0] == "new14999",
+			"Expected only the target at the top after switching, got:\n%s", strings.Join(frame, "\n"))
 	}
 }
 
