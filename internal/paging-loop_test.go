@@ -105,6 +105,35 @@ func TestReloadWhileStillReading(t *testing.T) {
 	screen.waitForRow(t, "new0")
 }
 
+// Reloading must not flash an empty screen before the reloaded lines arrive.
+// Ref: https://github.com/walles/moor/pull/478
+func TestReloadShowsNoEmptyFrame(t *testing.T) {
+	// Enough lines that the reloaded reader needs a moment before its first
+	// lines arrive. It counts all lines before reading any of them.
+	lineCount := 100_000
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", lineCount)), 0o600))
+
+	r, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(r)
+	pager.ShowLineNumbers = false
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", lineCount)), 0o600))
+	framesBeforeReload := len(screen.shownFrames())
+	typeRunes(t, screen, pagingDone, "r")
+	screen.waitForRow(t, "new0")
+
+	for _, frame := range screen.shownFrames()[framesBeforeReload:] {
+		assert.Assert(t, frame[0] == "old0" || frame[0] == "new0",
+			"Expected the first line at the top after reloading, got:\n%s", strings.Join(frame, "\n"))
+	}
+}
+
 // A file rewritten on disk must show up rewritten in the pager
 func TestRewrittenFileIsReloaded(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "lines.txt")
