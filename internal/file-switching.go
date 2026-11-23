@@ -49,9 +49,6 @@ func (p *Pager) switchToFile(newIndex int) {
 	p.filteringReader.SetBackingReader(p.views[newIndex].reader)
 	p.readerLock.Unlock()
 
-	// Before drawing anything, or we'll draw the old file contents
-	p.reloadCurrentReaderIfWanted()
-
 	entering := p.views[newIndex]
 	p.filter = entering.filter
 	if entering.horizontal != nil {
@@ -61,6 +58,11 @@ func (p *Pager) switchToFile(newIndex int) {
 	}
 	p.scrollPosition = newScrollPosition("Pager file switch")
 	p.setTargetLine(ptr.To(entering.targetLine))
+
+	// Before drawing anything, or we'll draw the old file contents. After
+	// setting the target line, so that the reload waits for the lines we're
+	// going to show.
+	p.reloadCurrentReaderIfWanted()
 
 	// The readerSwitched notification below gets us here too, but not before
 	// the main loop has drawn one frame of the top of the file
