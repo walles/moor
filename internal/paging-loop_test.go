@@ -224,6 +224,47 @@ func TestRewrittenFileIsReloadedWhenSwitchedTo(t *testing.T) {
 	}
 }
 
+// Switching to a file that was rewritten on disk while we were away should take
+// us straight back to where we were in it, without first showing some other
+// part of it
+func TestSwitchingToRewrittenFileShowsOnlyTarget(t *testing.T) {
+	// A file we leave at its top
+	a := reader.NewFromTextForTesting("a", linesForTesting("a", 3))
+
+	file := filepath.Join(t.TempDir(), "lines.txt")
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("old", 20_000)), 0o600))
+	b, err := reader.NewFromFilename(file, formatters.TTY16m, reader.ReaderOptions{Style: colorlessChromaStyle})
+	assert.NilError(t, err)
+
+	pager := NewPager(b, a)
+	pager.ShowLineNumbers = false
+	pager.searchHistory = &SearchHistory{} // No file backing, keep this test disk-free
+	screen := newPagingLoopScreen(20, 10)
+	pagingDone := startPagingInBackground(t, pager, screen)
+	screen.waitForRow(t, "old0")
+
+	typeRunes(t, screen, pagingDone, "g15000")
+	handEvent(t, screen, pagingDone, twin.EventKeyCode{KeyCode: twin.KeyEnter})
+	screen.waitForTopRow(t, "old14999")
+	waitForWatching(t, pager)
+
+	typeRunes(t, screen, pagingDone, ":n")
+	screen.waitForTopRow(t, "a0")
+
+	// Shorter, so that this must be a reload rather than an append
+	assert.NilError(t, os.WriteFile(file, []byte(linesForTesting("new", 19_000)), 0o600))
+	waitUntil(t, b.WantsReload, func() string { return "the rewritten file to be noticed" })
+
+	framesBeforeSwitch := len(screen.shownFrames())
+	typeRunes(t, screen, pagingDone, ":p")
+	screen.waitForTopRow(t, "new14999")
+
+	for _, frame := range screen.shownFrames()[framesBeforeSwitch:] {
+		assert.Assert(t, frame[0] == "a0" || frame[0] == "new14999",
+			"Expected only the target at the top after switching, got:\n%s", strings.Join(frame, "\n"))
+	}
+}
+
 // Open a file with old lines and go to the given line
 func startPagingAtLine(t *testing.T, file string, lineNumber int) (*Pager, *pagingLoopScreen, chan struct{}) {
 	t.Helper()
