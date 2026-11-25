@@ -30,6 +30,12 @@ type renderedLine struct {
 
 	cells textstyles.CellWithMetadataSlice
 
+	// How many screen columns this line would take up if the screen were wide
+	// enough, including the line number prefix. Lines are only fetched one
+	// sideways scroll step past the right edge of the screen, so this is never
+	// more than that.
+	unclippedWidth int
+
 	// Used for rendering clear-to-end-of-line control sequences:
 	// https://en.wikipedia.org/wiki/ANSI_escape_code#EL
 	//
@@ -62,10 +68,18 @@ func (p *Pager) redraw(spinner string) {
 func (p *Pager) renderIntoCells(spinner string) int {
 	log.Trace("renderIntoCells called")
 	p.screen.Clear()
-	p.longestLineLength = 0
 
 	lastUpdatedScreenLineNumber := -1
 	renderedScreen := p.renderLines()
+
+	// Scrolling right stops when the end of the longest line on screen
+	// reaches the right edge
+	width, _ := p.screen.Size()
+	p.maxLeftColumnZeroBased = p.leftColumnZeroBased
+	for _, line := range renderedScreen.lines {
+		p.maxLeftColumnZeroBased = max(p.maxLeftColumnZeroBased, line.unclippedWidth-width)
+	}
+
 	for screenLineNumber, row := range renderedScreen.lines {
 		lastUpdatedScreenLineNumber = screenLineNumber
 		column := 0
@@ -150,25 +164,6 @@ func (p *Pager) internalRenderLines(highlightSearchHitLines bool) renderedScreen
 	for _, line := range inputLines.Lines {
 		rendering := p.renderLine(line, numberPrefixLength, highlightSearchHitLines)
 
-		var onScreenLength int
-		for i := range rendering {
-			trimmedLen := len(rendering[i].cells.WithoutSpaceRight())
-			if trimmedLen > onScreenLength {
-				onScreenLength = trimmedLen
-			}
-		}
-
-		// We're trying to find the max length of readable characters to limit
-		// the scrolling to right, so we don't go over into the vast emptiness for no reason.
-		//
-		// The -1 fixed an issue that seemed like an off-by-one where sometimes, when first
-		// scrolling completely to the right, the first left scroll did not show the text again.
-		displayLength := p.leftColumnZeroBased + onScreenLength - 1
-
-		if displayLength >= p.longestLineLength {
-			p.longestLineLength = displayLength
-		}
-
 		allLines = append(allLines, rendering...)
 	}
 
@@ -250,11 +245,12 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 	} else {
 		// Request only screen width tokens plus whatever is needed on the left
 		// due to horizontal scrolling. Also, get one extra to the right so we
-		// can know whether to show overflow markers.
+		// can know whether to show overflow markers, and one sideways scroll
+		// step more so we know how far right there is anything to scroll to.
 		//
 		// This is a huge performance gain when dealing with files with
 		// extremeny long lines: https://github.com/walles/moor/issues/358
-		highlighted = line.HighlightedTokens(theme.plainText, theme.searchHit, p.search, width+p.leftColumnZeroBased+1)
+		highlighted = line.HighlightedTokens(theme.plainText, theme.searchHit, p.search, width+p.leftColumnZeroBased+1+p.SideScrollAmount)
 
 		// All on one line
 		wrapped = []textstyles.StyledRunesWithTrailer{{
@@ -287,11 +283,17 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 
 		decorated := p.decorateLine(visibleLineNumber, numberPrefixLength, subLine.StyledRunes)
 
+		unclippedWidth := numberPrefixLength
+		for _, char := range textstyles.CellWithMetadataSlice(subLine.StyledRunes).WithoutSpaceRight() {
+			unclippedWidth += char.Width()
+		}
+
 		rendered = append(rendered, renderedLine{
 			inputLineIndex:    line.Index,
 			inputLineNumber:   line.Number,
 			wrapIndex:         linemetadata.ScreenLines(wrapIndex),
 			cells:             decorated,
+			unclippedWidth:    unclippedWidth,
 			containsSearchHit: subLine.ContainsSearchHit,
 			trailer:           subLine.Trailer,
 		})
