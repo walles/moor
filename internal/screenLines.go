@@ -30,6 +30,12 @@ type renderedLine struct {
 
 	cells textstyles.CellWithMetadataSlice
 
+	// How many screen columns this line would take up if the screen were wide
+	// enough, including the line number prefix. Lines are only fetched one
+	// sideways scroll step past the right edge of the screen, so this is never
+	// more than that.
+	unclippedWidth int
+
 	// Used for rendering clear-to-end-of-line control sequences:
 	// https://en.wikipedia.org/wiki/ANSI_escape_code#EL
 	//
@@ -62,10 +68,18 @@ func (p *Pager) redraw(spinner string) {
 func (p *Pager) renderIntoCells(spinner string) int {
 	log.Trace("renderIntoCells called")
 	p.screen.Clear()
-	p.overflowRight = 0
 
 	lastUpdatedScreenLineNumber := -1
 	renderedScreen := p.renderLines()
+
+	// Scrolling right stops when the end of the longest line on screen
+	// reaches the right edge
+	width, _ := p.screen.Size()
+	p.maxLeftColumnZeroBased = p.leftColumnZeroBased
+	for _, line := range renderedScreen.lines {
+		p.maxLeftColumnZeroBased = max(p.maxLeftColumnZeroBased, line.unclippedWidth-width)
+	}
+
 	for screenLineNumber, row := range renderedScreen.lines {
 		lastUpdatedScreenLineNumber = screenLineNumber
 		column := 0
@@ -269,11 +283,17 @@ func (p *Pager) renderLine(line reader.NumberedLine, numberPrefixLength int, hig
 
 		decorated := p.decorateLine(visibleLineNumber, numberPrefixLength, subLine.StyledRunes)
 
+		unclippedWidth := numberPrefixLength
+		for _, char := range textstyles.CellWithMetadataSlice(subLine.StyledRunes).WithoutSpaceRight() {
+			unclippedWidth += char.Width()
+		}
+
 		rendered = append(rendered, renderedLine{
 			inputLineIndex:    line.Index,
 			inputLineNumber:   line.Number,
 			wrapIndex:         linemetadata.ScreenLines(wrapIndex),
 			cells:             decorated,
+			unclippedWidth:    unclippedWidth,
 			containsSearchHit: subLine.ContainsSearchHit,
 			trailer:           subLine.Trailer,
 		})
@@ -301,12 +321,6 @@ func (p *Pager) decorateLine(lineNumberToShow *linemetadata.Number, numberPrefix
 	}
 	newLine := make([]textstyles.CellWithMetadata, 0, width)
 	newLine = append(newLine, createLinePrefix(lineNumberToShow, numberPrefixLength)...)
-
-	contentsWidth := numberPrefixLength
-	for _, char := range contents {
-		contentsWidth += char.Width()
-	}
-	p.overflowRight = max(p.overflowRight, contentsWidth-p.leftColumnZeroBased-width)
 
 	// Find the first and last fully visible runes.
 	var firstVisibleRuneIndex *int

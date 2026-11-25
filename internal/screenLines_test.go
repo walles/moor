@@ -135,6 +135,7 @@ func TestSearchHighlight(t *testing.T) {
 				{Rune: '"', Style: twin.StyleDefault.WithAttr(twin.AttrReverse), IsSearchHit: true, StartsSearchHit: false},
 				{Rune: 'x', Style: twin.StyleDefault},
 			},
+			unclippedWidth: 4,
 		},
 	}, rendered,
 		cmp.AllowUnexported(twin.Style{}),
