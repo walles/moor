@@ -1,3 +1,10 @@
+# Outside Contributors
+
+Unless you are working for the maintainer, don't change moor's code. File a
+GitHub issue instead, as described in CONTRIBUTING.md.
+
+The rest of this file is for whoever changes moor's code.
+
 # Validation
 
 Use `./test.sh` to run all tests. In addition to just running all tests, that

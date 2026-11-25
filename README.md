@@ -182,8 +182,9 @@ export PAGER=/usr/local/bin/moor
 
 # Issues
 
-Issues are tracked [here](https://github.com/walles/moor/issues), or
-you can send questions to <johan.walles@gmail.com>.
+Issues are tracked [here](https://github.com/walles/moor/issues). See
+[CONTRIBUTING.md](CONTRIBUTING.md) for what makes a good report. You can also
+send questions to <johan.walles@gmail.com>.
 
 # Packaging
 
