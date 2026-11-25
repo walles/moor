@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -167,4 +168,49 @@ func BenchmarkFilterHugeFile(b *testing.B) {
 	for b.Loop() {
 		fr.rebuildCache(*fr.Filter)
 	}
+}
+
+// Repro for https://github.com/walles/moor/issues/483
+func TestSearchFilteredLines(t *testing.T) {
+	lines := []string{}
+	for i := 1; i <= 1000; i++ {
+		lines = append(lines, fmt.Sprintf("line %d", i))
+	}
+	backingReader := reader.NewFromTextForTesting("TestSearchFilteredLines", strings.Join(lines, "\n"))
+	assert.NilError(t, backingReader.Wait())
+
+	filter := search.For("line [1-5]")
+	filteringReader := &FilteringReader{
+		BackingReader: backingReader,
+		Filter:        &filter,
+	}
+
+	query := search.For("8")
+
+	// Find all hits the slow way
+	expected := []int{}
+	for i := 0; ; i++ {
+		line := filteringReader.GetLine(linemetadata.IndexFromZeroBased(i))
+		if line == nil {
+			break
+		}
+		if query.Matches(line.Plain()) {
+			expected = append(expected, line.Index.Index())
+		}
+	}
+	assert.Assert(t, len(expected) > 10)
+
+	// Step through the hits the way pressing "n" does
+	actual := []int{}
+	position := linemetadata.Index{}
+	for {
+		hit := FindFirstHit(filteringReader, query, position, nil, SearchDirectionForward)
+		if hit == nil {
+			break
+		}
+		actual = append(actual, hit.Index())
+		position = hit.NonWrappingAdd(1)
+	}
+
+	assert.DeepEqual(t, expected, actual)
 }
