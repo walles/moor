@@ -984,3 +984,22 @@ func TestScrollRightStopsAtEndOfLongestLine(t *testing.T) {
 
 	assert.Equal(t, pager.leftColumnZeroBased, 10)
 }
+
+// A long line scrolled off the top of the screen should not let us scroll right
+func TestScrollRightIgnoresLinesAboveScreen(t *testing.T) {
+	r := reader.NewFromTextForTesting("test", strings.Repeat("x", 30)+"\n"+strings.Repeat("short\n", 20))
+	assert.NilError(t, r.Wait())
+
+	pager := NewPager(r)
+	pager.screen = twin.NewFakeScreen(20, 10)
+	pager.ShowLineNumbers = false
+	pager.showLineNumbers = false
+
+	pager.redraw("")
+	pager.scrollPosition = pager.scrollPosition.NextLine(1)
+	pager.redraw("")
+	assert.Equal(t, pager.lineIndex().Index(), 1, "Test setup broken, long line should be above the screen")
+
+	pager.moveRight(pager.SideScrollAmount)
+	assert.Equal(t, pager.leftColumnZeroBased, 0)
+}
