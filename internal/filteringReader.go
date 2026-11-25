@@ -247,8 +247,11 @@ func (f *FilteringReader) GetLinesPreallocated(firstLine linemetadata.Index, res
 		return f.BackingReader.GetLinesPreallocated(firstLine, resultLines)
 	}
 
+	// Copy into the caller's slice. Callers rely on its capacity staying the
+	// same, and they would write into our filtered lines cache if we gave them
+	// a slice of it.
 	lines := f.GetLines(firstLine, cap(*resultLines))
-	*resultLines = lines.Lines
+	*resultLines = append((*resultLines)[:0], lines.Lines...)
 	return lines.Status
 }
 
